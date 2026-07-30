@@ -73,7 +73,7 @@ completed: 2026-07-30
 1. **Task 1: 重构 cmd_doctor 为 list[dict] 收集 + 双通道渲染** - `81baf2e` (feat)
 2. **Task 2: 新建 tests/test_doctor.py 六类护栏** - `00c5ead` (test)
 
-**Plan metadata:** （本提交回填）
+**Plan metadata:** `bd52900` (docs: complete plan)
 
 ## 供 Phase 2 消费：`--json` 顶层键清单
 
