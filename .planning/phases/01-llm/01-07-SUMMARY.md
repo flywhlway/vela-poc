@@ -65,7 +65,7 @@ completed: 2026-07-30
 1. **Task 1: 新建 tests/test_realllm.py 端到端验收用例** - `5b73d6e` (test)
 2. **Task 2: 对齐 docs/LLM_PRODUCTION.md** - `85b9b31` (docs)
 
-**Plan metadata:** （本提交）
+**Plan metadata:** `b1e9d82` (docs: complete plan)
 
 ## 供 Plan 08 实测 checkpoint：完整运行命令
 
