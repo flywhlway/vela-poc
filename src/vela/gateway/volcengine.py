@@ -10,10 +10,11 @@ Ark 提供 OpenAI 兼容端点，因此直接复用 OpenAICompatProvider，
   向量     : VELA_ARK_EMBED_MODEL（/embeddings）
 
 生产切换步骤（不改任何业务代码）：
-  1. export VELA_LLM_PROVIDER=volcengine
-  2. export VELA_ARK_API_KEY=...   export VELA_ARK_MODEL=ep-xxxxxxxx
-  3. 可选 export VELA_ARK_MODEL_FALLBACK=ep-yyyyyyyy   （主接入点故障时自动降级）
-  4. vela agent diagnose ... —— 网关自动完成脱敏、计量、审计、降级
+  1. 在项目根 `.env` 写入 VELA_LLM_PROVIDER=volcengine
+  2. 同文件写入 VELA_ARK_API_KEY=... 与 VELA_ARK_MODEL=ep-xxxxxxxx
+  3. 可选写入 VELA_ARK_MODEL_FALLBACK=ep-yyyyyyyy   （主接入点故障时自动降级）
+  4. `src/vela/config.py` 导入时自动加载（override=False）；vela agent diagnose ... ——
+     网关自动完成脱敏、计量、审计、降级
 """
 from __future__ import annotations
 

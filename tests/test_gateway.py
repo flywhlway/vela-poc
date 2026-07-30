@@ -154,6 +154,10 @@ def test_openai_compat_models_for_reads_env(monkeypatch):
 
 
 def test_openai_compat_missing_credentials_raises_clear_error(monkeypatch):
+    """凭证缺失前置校验：`_post` 随 SDK 重写移除，由 ensure_credentials() 承接。
+
+    断言意图不变——缺凭证必须抛出指名环境变量的 LLMError，且不发网络请求。
+    """
     from vela.gateway.base import LLMError
     from vela.gateway.openai_compat import OpenAICompatProvider
     monkeypatch.delenv("VELA_OPENAI_BASE_URL", raising=False)
@@ -161,7 +165,7 @@ def test_openai_compat_missing_credentials_raises_clear_error(monkeypatch):
     p = OpenAICompatProvider({"base_url_env": "VELA_OPENAI_BASE_URL",
                               "api_key_env": "VELA_OPENAI_API_KEY"}, name="openai_compat")
     with pytest.raises(LLMError):
-        p._post("/chat/completions", {})
+        p.ensure_credentials()
 
 
 def test_volcengine_provider_is_openai_compatible_subclass():

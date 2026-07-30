@@ -1,15 +1,15 @@
-"""OpenAI 兼容供应商适配器（stdlib urllib 实现，零第三方依赖）。
+"""基于 openai 官方 SDK 实现的 OpenAI 兼容供应商适配器。
 
 覆盖：火山引擎方舟(Ark) / vLLM / One-API / 自建网关 / OpenAI 本体。
 差异点全部由 config/llm.yaml 的 provider 段描述，代码不含任何厂商硬编码。
 """
 from __future__ import annotations
 
-import json
 import os
 import time
-import urllib.error
-import urllib.request
+
+import openai
+from openai import OpenAI
 
 from vela.gateway.base import LLMError, LLMRequest, LLMResponse, Provider
 
@@ -21,11 +21,9 @@ class OpenAICompatProvider(Provider):
         self.base_url = (os.environ.get(self.cfg.get("base_url_env", ""), "")
                          or self.cfg.get("base_url_default", "")).rstrip("/")
         self.api_key = os.environ.get(self.cfg.get("api_key_env", ""), "")
-        self.chat_path = self.cfg.get("chat_path", "/chat/completions")
-        self.embed_path = self.cfg.get("embed_path", "/embeddings")
         self.timeout_s = float(self.cfg.get("timeout_s", 120))
         self.max_retries = int(self.cfg.get("max_retries", 2))
-        self.backoff = float(self.cfg.get("retry_backoff_s", 1.5))
+        self._sdk: OpenAI | None = None
 
     # ------------------------------------------------------------------ #
     def models_for(self, logical_model: str) -> list[str]:
@@ -58,67 +56,77 @@ class OpenAICompatProvider(Provider):
                 uniq.append(m)
         return uniq
 
-    def _post(self, path: str, payload: dict) -> dict:
+    def ensure_credentials(self) -> None:
+        """本地凭证前置校验：缺 base_url / api_key 时抛指名环境变量的 LLMError。
+
+        公开方法供 doctor（Plan 06）与测试承接原 `_post` 的断言意图；不发网络请求。
+        """
         if not self.base_url:
             raise LLMError(f"provider={self.name} 未配置 base_url"
                            f"（环境变量 {self.cfg.get('base_url_env')}）")
         if not self.api_key:
             raise LLMError(f"provider={self.name} 未配置 API Key"
                            f"（环境变量 {self.cfg.get('api_key_env')}）")
-        url = self.base_url + path
-        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        last: Exception | None = None
-        for attempt in range(self.max_retries + 1):
-            req = urllib.request.Request(url, data=data, method="POST", headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}",
-                "User-Agent": "vela-poc/1.0",
-            })
-            try:
-                with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
-                    return json.loads(resp.read().decode("utf-8"))
-            except urllib.error.HTTPError as e:
-                body = e.read().decode("utf-8", "replace")[:500]
-                last = LLMError(f"HTTP {e.code}: {body}")
-                if e.code in (400, 401, 403, 404):      # 不可重试
-                    raise last
-            except Exception as e:                       # 网络类错误可重试
-                last = e
-            if attempt < self.max_retries:
-                time.sleep(self.backoff * (attempt + 1))
-        raise LLMError(f"调用 {url} 失败：{last}")
+
+    def _client(self) -> OpenAI:
+        """惰性构造并复用 OpenAI 客户端。
+
+        本项目单线程单进程同步模型，复用同一客户端以共享连接池；
+        构造期不发起网络请求，不违反导入静默纪律。
+        """
+        self.ensure_credentials()
+        if self._sdk is None:
+            self._sdk = OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url,
+                timeout=self.timeout_s,
+                max_retries=self.max_retries,
+            )
+        return self._sdk
+
+    def _scrub(self, text: str) -> str:
+        """掩码异常消息中可能回显的 API key。"""
+        if self.api_key and self.api_key in text:
+            return text.replace(self.api_key, "***")
+        return text
 
     def complete(self, req: LLMRequest, physical_model: str, params: dict) -> LLMResponse:
-        payload = {
+        kwargs: dict = {
             "model": physical_model,
             "messages": req.as_messages(),
             "temperature": float(params.get("temperature", 0.2)),
             "max_tokens": int(params.get("max_tokens", 1024)),
-            "stream": False,
         }
         if params.get("json_mode"):
-            payload["response_format"] = {"type": "json_object"}
+            kwargs["response_format"] = {"type": "json_object"}
         t0 = time.time()
-        data = self._post(self.chat_path, payload)
-        choices = data.get("choices") or []
+        try:
+            resp = self._client().chat.completions.create(**kwargs)
+        except openai.OpenAIError as e:
+            # 不区分「不可重试」异常： (a) gateway/base.py 只读不改，中断语义只能改在那里；
+            # (b) 既有测试依赖「任何异常都 fallback」；(c) 降级链可能跨供应商环境变量，
+            # 鉴权失败换下一个接入点在本项目配置形态下仍有意义。
+            raise LLMError(f"{type(e).__name__}: {self._scrub(str(e))}") from e
+        choices = resp.choices or []
         if not choices:
-            raise LLMError(f"响应缺少 choices：{str(data)[:300]}")
-        msg = choices[0].get("message") or {}
-        usage = data.get("usage") or {}
+            raise LLMError(f"响应缺少 choices：{self._scrub(str(resp))[:300]}")
+        usage = resp.usage
         return LLMResponse(
-            text=msg.get("content") or "",
+            text=(choices[0].message.content or ""),
             logical_model=req.logical_model, physical_model=physical_model, provider=self.name,
-            prompt_tokens=int(usage.get("prompt_tokens", 0)),
-            completion_tokens=int(usage.get("completion_tokens", 0)),
+            prompt_tokens=int(getattr(usage, "prompt_tokens", 0) or 0),
+            completion_tokens=int(getattr(usage, "completion_tokens", 0) or 0),
             latency_ms=(time.time() - t0) * 1000,
-            finish_reason=choices[0].get("finish_reason", "stop"),
-            raw={"id": data.get("id"), "model": data.get("model")})
+            finish_reason=choices[0].finish_reason or "stop",
+            raw={"id": resp.id, "model": resp.model})
 
     def embed(self, texts: list[str], model: str | None = None) -> list[list[float]]:
         env = self.cfg.get("embed_model_env", "")
         m = model or (os.environ.get(env) if env else None)
         if not m:
             raise LLMError(f"未配置向量模型（环境变量 {env}）")
-        data = self._post(self.embed_path, {"model": m, "input": texts})
-        return [d["embedding"] for d in sorted(data.get("data", []),
-                                               key=lambda x: x.get("index", 0))]
+        try:
+            data = self._client().embeddings.create(model=m, input=texts)
+        except openai.OpenAIError as e:
+            raise LLMError(f"{type(e).__name__}: {self._scrub(str(e))}") from e
+        return [d.embedding for d in sorted(data.data, key=lambda x: x.index)]
