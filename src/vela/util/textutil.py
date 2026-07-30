@@ -71,6 +71,18 @@ def mask_vin(vin: str) -> str:
     return f"VIN_{pre}_{vin[-4:]}"
 
 
+# ---------------------------------------------------------------------------
+# API key 掩码（D-17）：前 keep 后 keep + 固定 4 星；短值全掩
+# 用于 vela doctor 人读与 --json 两种输出形态，不泄露密钥长度。
+# ---------------------------------------------------------------------------
+def mask_secret(value: str, keep: int = 4) -> str:
+    if not value:
+        return ""
+    if len(value) < keep * 2 + 4:
+        return "****"
+    return value[:keep] + "****" + value[-keep:]
+
+
 def truncate(text: str, max_chars: int) -> tuple[str, bool]:
     if len(text) <= max_chars:
         return text, False
