@@ -1,0 +1,110 @@
+{
+  "archive": "OTA_406753_TASK-10062.zip",
+  "campaign_id": "CMP-2026Q3-102",
+  "culprit_components": [
+    "verify_svc"
+  ],
+  "culprit_ecu": null,
+  "expect_keywords": [
+    "signature",
+    "sha256",
+    "invalid",
+    "mismatch"
+  ],
+  "expect_skills": [
+    "SK-SIG-VERIFY"
+  ],
+  "fail_phase": "VERIFY",
+  "files": [
+    {
+      "encoding": "utf-8",
+      "format": "uptime_relative",
+      "lines": 1,
+      "path": "logs/flash/bootloader.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "kv_structured",
+      "lines": 12,
+      "path": "logs/campaign/campaign.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "short_nodate",
+      "lines": 1525,
+      "path": "logs/diag/diag_router.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "iso_pid_tid",
+      "lines": 1082,
+      "path": "logs/downloader/downloader.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "iso_pid_tid",
+      "lines": 1085,
+      "path": "logs/downloader/downloader.log.1"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "iso_pid_tid",
+      "lines": 1085,
+      "path": "logs/downloader/downloader.log.2"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "logcat_threadtime",
+      "lines": 4378,
+      "path": "logs/ivi/ivi_app.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "dmesg_monotonic",
+      "lines": 1340,
+      "path": "logs/kernel/dmesg.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "iso_bracket_comp",
+      "lines": 6,
+      "path": "logs/ota_master/ota_master.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "syslog_rfc3164",
+      "lines": 2134,
+      "path": "logs/power/powerd.log"
+    },
+    {
+      "encoding": "gb18030",
+      "format": "cn_bracket_level",
+      "lines": 570,
+      "path": "logs/storage/storage_svc.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "logcat_threadtime",
+      "lines": 10673,
+      "path": "logs/tbox/tbox_comm.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "json_line",
+      "lines": 3,
+      "path": "logs/verify/verify.jsonl"
+    }
+  ],
+  "healthy": false,
+  "model": "PHEV-M3",
+  "narrative": "下载完成但包体 sha256 与清单不一致，验签失败，任务在 VERIFY 阶段中止。",
+  "region": "CN-SH",
+  "root_cause_label": "signature_verify_fail",
+  "scenario_id": "S2_SIGNATURE_FAIL",
+  "scenario_zh": "升级包签名校验失败",
+  "seed": 2015987281,
+  "task_id": "TASK-10062",
+  "total_records": 23894,
+  "vin": "LSVM3HV94SE406753",
+  "vin_last4": "6753"
+}

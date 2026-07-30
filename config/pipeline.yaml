@@ -1,0 +1,92 @@
+# =====================================================================
+# VELA 证据平面（预处理管线）配置  —— 对应《OTA车端日志预处理与列式取证库技术方案》§14.1
+# =====================================================================
+pipeline_version: "1.0.0"
+schema_version: 1
+
+unpack:
+  max_uncompressed_bytes: 21474836480   # 20 GiB 解压上限，防 zip bomb
+  max_files: 200000
+  max_nesting_depth: 3                  # 嵌套压缩包展开层数
+  allow_symlinks: false                 # zip-slip / symlink 逃逸防护
+  keep_raw: true                        # 保留解包产物（L2 溯源验证需要）
+
+discover:
+  # 非日志文件排除（元数据/图片/归档/数据库文件等），命中即不进入解析
+  exclude_patterns:
+    - "package_meta.json"
+    - "**/*.json"
+    - "**/*.png"
+    - "**/*.jpg"
+    - "**/*.db"
+    - "**/*.sqlite*"
+    - "**/*.pcap"
+    - "**/*.dlt"
+  encoding_candidates: ["utf-8", "gb18030", "utf-16", "latin-1"]
+  encoding_sample_bytes: 65536
+  binary_ratio_threshold: 0.30          # 非文本字节占比超过即判定二进制并跳过
+  # 组件归属：按包内路径前缀匹配，先匹配先生效（顺序敏感）
+  component_rules:
+    - {match: "**/ota_master/**",     component: "ota_master",      rank: 10}
+    - {match: "**/campaign/**",       component: "campaign_client", rank: 20}
+    - {match: "**/downloader/**",     component: "downloader",      rank: 30}
+    - {match: "**/verify/**",         component: "verify_svc",      rank: 40}
+    - {match: "**/uds/**",            component: "uds_stack",       rank: 50}
+    - {match: "**/flash/**",          component: "flash_agent",     rank: 60}
+    - {match: "**/diag/**",           component: "diag_router",     rank: 70}
+    - {match: "**/power/**",          component: "power_mgr",       rank: 80}
+    - {match: "**/storage/**",        component: "storage_svc",     rank: 90}
+    - {match: "**/tbox/**",           component: "tbox_comm",       rank: 100}
+    - {match: "**/ivi/**",            component: "ivi_app",         rank: 110}
+    - {match: "**/kernel/**",         component: "kernel",          rank: 120}
+    - {match: "**/*",                 component: "unknown",         rank: 999}
+
+reader:
+  max_line_bytes: 262144                # 单行超过即标记 GIANT_LINE 并截断
+  multiline:
+    enabled: true
+    # 续行判定：不以时间戳/级别开头，且命中以下形态之一
+    continuation_patterns:
+      - '^\s+at\s'                      # Java 栈帧
+      - '^\s*#\d+\s+0x'                 # C/C++ backtrace
+      - '^\s*Caused by:'
+      - '^\s{4,}\S'                     # 缩进续行
+    max_span_lines: 200
+
+timeline:
+  default_timezone: "Asia/Shanghai"
+  reference_time: null                  # null => 取日志包 mtime；生产可由上传表单填写
+  year_inference: true                  # 无年份格式（F3）的年份推断 + 跨年回绕检测
+  clock_jump_threshold_ms: 5000         # 相邻行倒退超过该值判定时钟跳变，clock_epoch+1
+  anchor:
+    enable_dual_stamp: true             # 同行内同时含 wall+monotonic 即为强锚点
+    enable_regression: true             # 多锚点线性回归对齐 monotonic -> wall
+    min_anchors_for_regression: 3
+
+fingerprint:
+  raw_hash_algo: "blake3-128"           # 缺库自动回退 blake2b-128，语义不变
+  norm_hash_algo: "xxh3-64"             # 缺库自动回退 blake2b-64
+  row_hash_algo: "xxh3-64"              # 交底书机制二：H(raw ‖ path ‖ line_no)
+  canon_rules_version: "canon-v2"
+
+template:
+  engine: "minidrain"                   # 内置确定性实现，不依赖 drain3
+  sim_threshold: 0.40
+  max_depth: 4
+  max_children: 100
+  max_clusters: 5000
+
+writer:
+  row_group_size: 200000
+  compression: "zstd"
+  partition_by: ["component", "dt"]
+  sort_key: ["ts_utc", "source_rank", "file_id", "line_no"]
+
+gold:
+  build_fts: true                       # DuckDB FTS 扩展；离线不可用时自动降级 LIKE/regex
+  build_views: true
+  storm_threshold_per_sec: 100
+
+qa:
+  max_unparsed_ratio: 0.05              # 超过即 QA 报告标红
+  min_ts_confidence_ratio: 0.80         # ts_confidence>=0.6 的行占比下限

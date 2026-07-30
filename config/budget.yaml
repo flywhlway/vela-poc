@@ -1,0 +1,54 @@
+# =====================================================================
+# 机制一：预算感知证据压缩 + 双水位预算  |  机制四：鸟瞰-下钻工具护栏
+# profile: production = 交底书原值；poc = 缩小 20 倍以便在仿真数据上可触发、可观测
+# =====================================================================
+active_profile: poc          # 可被环境变量 VELA_PROFILE 覆盖
+
+profiles:
+
+  production:
+    compression:
+      whitelist_terms: [error, fail, failed, failure, exception, abort, aborted, crash,
+                        panic, denied, timeout, timed out, fatal, nrc, reject, corrupt,
+                        insufficient, unavailable, "错误", "失败", "异常", "中止", "超时", "拒绝"]
+      whitelist_cap_per_template: 50      # N3：同模板白名单行上限，超出保留首尾+计数摘要
+      rare_template_max_count: 5          # N2：出现次数 <= N2 的模板整体豁免
+      template_quota_lines: 3             # N1：其余行同模板保留行数
+      slide_window_seconds: 300           # 超预算滑窗摘要块大小
+    budget:
+      round_evidence_tokens: 250000       # 轮次级证据预算
+      session_evidence_multiplier: 3      # 会话累计 = 3 倍单轮
+      round_llm_tokens: 120000            # 网关侧（会话,轮次）计量键硬切断
+      session_llm_tokens: 900000
+      max_rounds: 30
+    guardrail:
+      detail_fetch_hard_limit: 5000       # 单次明细拉取硬上限（查询门面强制截断）
+      wide_result_warn_threshold: 1500    # 结果过宽 -> 注入窄化建议到模型上下文
+      context_lines_limit: 200
+      sql_max_rows: 2000
+
+  poc:
+    compression:
+      whitelist_terms: [error, fail, failed, failure, exception, abort, aborted, crash,
+                        panic, denied, timeout, timed out, fatal, nrc, reject, corrupt,
+                        insufficient, unavailable, "错误", "失败", "异常", "中止", "超时", "拒绝"]
+      whitelist_cap_per_template: 8
+      rare_template_max_count: 5
+      template_quota_lines: 3
+      slide_window_seconds: 300
+    budget:
+      round_evidence_tokens: 12000
+      session_evidence_multiplier: 3
+      round_llm_tokens: 8000
+      session_llm_tokens: 60000
+      max_rounds: 6
+    guardrail:
+      detail_fetch_hard_limit: 5000
+      wide_result_warn_threshold: 300
+      context_lines_limit: 200
+      sql_max_rows: 2000
+
+# token 估算函数：中英混排经验值（确定性，不依赖分词器）
+token_estimate:
+  bytes_per_token_ascii: 4.0
+  bytes_per_token_cjk: 1.5

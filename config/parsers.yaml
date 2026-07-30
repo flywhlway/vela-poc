@@ -1,0 +1,148 @@
+# =====================================================================
+# 解析器注册表 —— 20+ 车端日志文本格式
+# 匹配顺序 = 列表顺序（先匹配先生效）；每个解析器命名捕获组即 Schema 字段
+# 新增格式 = 追加一条 YAML，无需改代码（生产接入自定义格式的扩展点）
+# =====================================================================
+parsers:
+
+  - name: iso_bracket_comp
+    version: "1.0"
+    ts_kind: WALL
+    priority: 10
+    regex: '^(?P<ts>\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[.,]\d{1,6})\s+\[(?P<logger>[^\]]+)\]\s+(?P<level>[A-Z]{1,5})\s+(?P<message>.*)$'
+    ts_format: "iso"
+    sample: '2026-07-20 11:22:33.123 [ota_master] INFO session begin task=T-1'
+
+  - name: iso_pid_tid
+    version: "1.0"
+    ts_kind: WALL
+    priority: 20
+    regex: '^(?P<ts>\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[.,]\d{1,6})\s+(?P<pid>\d+)\s+(?P<tid>\d+)\s+(?P<level>[A-Z]{1,5})\s+(?P<logger>[\w.\-]+):\s+(?P<message>.*)$'
+    ts_format: "iso"
+    sample: '2026-07-20 11:22:33.123 1420 1455 E UdsClient: NRC 0x72'
+
+  - name: logcat_threadtime
+    version: "1.0"
+    ts_kind: WALL
+    priority: 30
+    regex: '^(?P<ts>\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+(?P<pid>\d+)\s+(?P<tid>\d+)\s+(?P<level>[VDIWEFS])\s+(?P<logger>[^:]+):\s?(?P<message>.*)$'
+    ts_format: "md_hms_ms"        # 无年份 -> 触发年份推断（F3）
+    sample: '07-20 11:22:33.123  1234  5678 E OtaDl: chunk 17 failed'
+
+  - name: dmesg_monotonic
+    version: "1.0"
+    ts_kind: MONOTONIC
+    priority: 40
+    regex: '^\[\s*(?P<mono>\d+\.\d{6})\]\s*(?:<(?P<klevel>\d)>)?\s*(?P<message>.*)$'
+    ts_format: "monotonic_s"
+    sample: '[  123.456789] mmc0: error -110 whilst initialising SD card'
+
+  - name: syslog_rfc3164
+    version: "1.0"
+    ts_kind: WALL
+    priority: 50
+    regex: '^(?P<ts>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(?P<host>\S+)\s+(?P<process>[\w\-./]+)(?:\[(?P<pid>\d+)\])?:\s*(?P<message>.*)$'
+    ts_format: "bsd_mdt"          # 无年份 -> 年份推断
+    sample: 'Jul 20 11:22:33 tbox powerd[812]: battery voltage 10.8V below threshold'
+
+  - name: dlt_verbose
+    version: "1.0"
+    ts_kind: WALL
+    priority: 60
+    regex: '^(?P<ts>\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{6})\s+(?P<ecu>\w{1,4})\s+(?P<app>\w{1,4})\s+(?P<ctx>\w{1,4})\s+log\s+(?P<level>\w+)\s+(?P<message>.*)$'
+    ts_format: "slash_iso"
+    sample: '2026/07/20 11:22:33.123456 ECU1 OTAM MAIN log error TransferData timeout'
+
+  - name: glog_style
+    version: "1.0"
+    ts_kind: WALL
+    priority: 70
+    regex: '^(?P<level>[IWEF])(?P<ts>\d{4}\s+\d{2}:\d{2}:\d{2}\.\d{6})\s+(?P<tid>\d+)\s+(?P<src_loc>[\w.\-]+:\d+)\]\s*(?P<message>.*)$'
+    ts_format: "glog_mmdd"        # 无年份 -> 年份推断
+    sample: 'E0720 11:22:33.123456  1420 flash_agent.cc:214] erase sector failed'
+
+  - name: json_line
+    version: "1.0"
+    ts_kind: WALL
+    priority: 80
+    json: true                    # 由代码走 JSON 分支，非正则
+    json_map:
+      ts: ["ts", "timestamp", "time", "@timestamp"]
+      level: ["lvl", "level", "severity"]
+      logger: ["logger", "tag", "module"]
+      message: ["msg", "message", "event"]
+      pid: ["pid"]
+      tid: ["tid"]
+    sample: '{"ts":"2026-07-20T11:22:33.123Z","lvl":"ERROR","module":"verify","msg":"signature invalid"}'
+
+  - name: cn_bracket_level
+    version: "1.0"
+    ts_kind: WALL
+    priority: 90
+    regex: '^(?P<ts>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s*[【\[](?P<level_cn>[^】\]]+)[】\]]\s*(?P<message>.*)$'
+    ts_format: "iso"
+    level_cn_map: {"调试": DEBUG, "信息": INFO, "提示": INFO, "警告": WARN, "错误": ERROR, "严重": FATAL}
+    sample: '2026-07-20 11:22:33 【错误】刷写中止：目标 ECU 无响应'
+
+  - name: kv_structured
+    version: "1.0"
+    ts_kind: WALL
+    priority: 100
+    regex: '^ts=(?P<ts>\S+)\s+level=(?P<level>\w+)\s+comp=(?P<logger>\S+)\s+(?P<message>.*)$'
+    ts_format: "iso"
+    sample: 'ts=2026-07-20T11:22:33.123456Z level=warn comp=downloader retry=3 url=...'
+
+  - name: short_nodate
+    version: "1.0"
+    ts_kind: WALL
+    priority: 110
+    regex: '^(?P<ts>\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s+(?P<level>[A-Z]{1,5})\s+(?P<message>.*)$'
+    ts_format: "md_hms"
+    sample: '07-20 11:22:33 WARN heartbeat missed'
+
+  - name: uptime_relative
+    version: "1.0"
+    ts_kind: BOOT_RELATIVE
+    priority: 120
+    regex: '^\+(?P<mono>\d+\.\d{3})s\s+(?P<level>[A-Z]+)\s+(?P<message>.*)$'
+    ts_format: "monotonic_s"
+    sample: '+12.345s INFO bootloader entered programming session'
+
+  # 兜底：未命中任何格式 -> parse_status=UNPARSED，ts 由前一行继承（DERIVED）
+  - name: fallback_raw
+    version: "1.0"
+    ts_kind: NONE
+    priority: 9999
+    regex: '^(?P<message>.*)$'
+    ts_format: null
+    sample: '<任意无法结构化解析的行>'
+
+# 级别归一映射（原始 -> 规范级别）
+level_map:
+  V: TRACE
+  VERBOSE: TRACE
+  T: TRACE
+  TRACE: TRACE
+  D: DEBUG
+  DEBUG: DEBUG
+  I: INFO
+  INFO: INFO
+  NOTICE: NOTICE
+  N: NOTICE
+  W: WARN
+  WARN: WARN
+  WARNING: WARN
+  E: ERROR
+  ERR: ERROR
+  ERROR: ERROR
+  F: FATAL
+  FATAL: FATAL
+  CRIT: FATAL
+  CRITICAL: FATAL
+  S: FATAL
+  PANIC: FATAL
+
+# 内核 <n> 数字级别映射
+klevel_map: {0: FATAL, 1: FATAL, 2: FATAL, 3: ERROR, 4: WARN, 5: NOTICE, 6: INFO, 7: DEBUG}
+
+level_num: {TRACE: 10, DEBUG: 20, INFO: 25, NOTICE: 28, WARN: 30, ERROR: 40, FATAL: 50, UNKNOWN: 0}

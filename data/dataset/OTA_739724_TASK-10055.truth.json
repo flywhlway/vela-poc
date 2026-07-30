@@ -1,0 +1,106 @@
+{
+  "archive": "OTA_739724_TASK-10055.zip",
+  "campaign_id": "CMP-2026Q3-101",
+  "culprit_components": [
+    "downloader",
+    "tbox_comm"
+  ],
+  "culprit_ecu": "0x10",
+  "expect_keywords": [
+    "timeout",
+    "chunk",
+    "retry",
+    "HTTP"
+  ],
+  "expect_skills": [
+    "SK-DL-TIMEOUT",
+    "SK-NET-LINK"
+  ],
+  "fail_phase": "DOWNLOAD",
+  "files": [
+    {
+      "encoding": "utf-8",
+      "format": "uptime_relative",
+      "lines": 1,
+      "path": "logs/flash/bootloader.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "kv_structured",
+      "lines": 12,
+      "path": "logs/campaign/campaign.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "short_nodate",
+      "lines": 1225,
+      "path": "logs/diag/diag_router.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "iso_pid_tid",
+      "lines": 673,
+      "path": "logs/downloader/downloader.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "iso_pid_tid",
+      "lines": 674,
+      "path": "logs/downloader/downloader.log.1"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "iso_pid_tid",
+      "lines": 674,
+      "path": "logs/downloader/downloader.log.2"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "logcat_threadtime",
+      "lines": 3517,
+      "path": "logs/ivi/ivi_app.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "dmesg_monotonic",
+      "lines": 1078,
+      "path": "logs/kernel/dmesg.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "iso_bracket_comp",
+      "lines": 6,
+      "path": "logs/ota_master/ota_master.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "syslog_rfc3164",
+      "lines": 1714,
+      "path": "logs/power/powerd.log"
+    },
+    {
+      "encoding": "gb18030",
+      "format": "cn_bracket_level",
+      "lines": 439,
+      "path": "logs/storage/storage_svc.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "logcat_threadtime",
+      "lines": 8578,
+      "path": "logs/tbox/tbox_comm.log"
+    }
+  ],
+  "healthy": false,
+  "model": "EV-A5",
+  "narrative": "下载至 62% 时 CDN 节点响应超时，连续重试 5 次均失败，任务在 DOWNLOAD 阶段中止。",
+  "region": "CN-CD",
+  "root_cause_label": "download_cdn_timeout",
+  "scenario_id": "S1_DOWNLOAD_TIMEOUT",
+  "scenario_zh": "下载分片超时（CDN/链路）",
+  "seed": 1269945464,
+  "task_id": "TASK-10055",
+  "total_records": 18591,
+  "vin": "LSVA5E8E9SF739724",
+  "vin_last4": "9724"
+}

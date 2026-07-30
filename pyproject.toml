@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vela"
+version = "1.0.0"
+description = "VELA — 车联网 OTA 日志证据化与智能诊断 POC（本地优先 / 可验证 / 可观测 / 可评估 / 可部署）"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "duckdb>=1.0",
+  "pyarrow>=14",
+  "PyYAML>=6.0",
+  "pytz>=2024.1",
+]
+
+[project.optional-dependencies]
+fast = ["xxhash>=3.4", "blake3>=0.4"]
+serve = ["fastapi>=0.110", "uvicorn>=0.29"]
+dev = ["pytest>=8.0"]
+all = ["xxhash>=3.4", "blake3>=0.4", "fastapi>=0.110", "uvicorn>=0.29", "pytest>=8.0"]
+
+[project.scripts]
+vela = "vela.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+vela = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+  "slow: 端到端较慢用例",
+  "determinism: 确定性回归用例",
+]

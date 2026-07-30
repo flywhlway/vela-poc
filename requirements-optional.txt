@@ -1,0 +1,6 @@
+# ---- 可选依赖：缺失时自动降级到标准库实现，功能不受影响 ----
+xxhash>=3.4      # 缺失 -> 回退 hashlib.blake2b(8B)，norm_hash/row_hash 语义不变
+blake3>=0.4      # 缺失 -> 回退 hashlib.blake2b(16B)，raw_hash 语义不变
+fastapi>=0.110   # 缺失 -> `vela serve` 回退到标准库 http.server
+uvicorn>=0.29
+pytest>=8.0      # 运行测试套件所需

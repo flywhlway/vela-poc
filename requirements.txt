@@ -1,0 +1,5 @@
+# ---- 核心依赖（必需，纯本地、无容器）----
+duckdb>=1.0
+pyarrow>=14
+PyYAML>=6.0
+pytz>=2024.1        # DuckDB 返回 TIMESTAMPTZ 到 Python 时需要

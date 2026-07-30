@@ -1,0 +1,123 @@
+{
+  "archive": "OTA_024299_TASK-10076.zip",
+  "campaign_id": "CMP-2026Q3-104",
+  "culprit_components": [
+    "power_mgr",
+    "uds_stack"
+  ],
+  "culprit_ecu": "0x22",
+  "expect_keywords": [
+    "voltage",
+    "0x93",
+    "battery",
+    "10."
+  ],
+  "expect_skills": [
+    "SK-POWER"
+  ],
+  "fail_phase": "FLASH",
+  "files": [
+    {
+      "encoding": "utf-8",
+      "format": "uptime_relative",
+      "lines": 3,
+      "path": "logs/flash/bootloader.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "kv_structured",
+      "lines": 12,
+      "path": "logs/campaign/campaign.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "short_nodate",
+      "lines": 1578,
+      "path": "logs/diag/diag_router.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "iso_pid_tid",
+      "lines": 1082,
+      "path": "logs/downloader/downloader.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "iso_pid_tid",
+      "lines": 1085,
+      "path": "logs/downloader/downloader.log.1"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "iso_pid_tid",
+      "lines": 1085,
+      "path": "logs/downloader/downloader.log.2"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "glog_style",
+      "lines": 5,
+      "path": "logs/flash/flash_agent.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "logcat_threadtime",
+      "lines": 4530,
+      "path": "logs/ivi/ivi_app.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "dmesg_monotonic",
+      "lines": 1387,
+      "path": "logs/kernel/dmesg.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "iso_bracket_comp",
+      "lines": 6,
+      "path": "logs/ota_master/ota_master.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "syslog_rfc3164",
+      "lines": 2212,
+      "path": "logs/power/powerd.log"
+    },
+    {
+      "encoding": "gb18030",
+      "format": "cn_bracket_level",
+      "lines": 586,
+      "path": "logs/storage/storage_svc.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "logcat_threadtime",
+      "lines": 11043,
+      "path": "logs/tbox/tbox_comm.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "dlt_verbose",
+      "lines": 561,
+      "path": "logs/uds/uds_client.log"
+    },
+    {
+      "encoding": "utf-8",
+      "format": "json_line",
+      "lines": 2,
+      "path": "logs/verify/verify.jsonl"
+    }
+  ],
+  "healthy": false,
+  "model": "EV-A5",
+  "narrative": "蓄电池电压跌至 10.6V 低于 11.0V 阈值，BMS(0x22) 返回 NRC 0x93 voltageTooLow 拒绝刷写。",
+  "region": "CN-SH",
+  "root_cause_label": "power_voltage_drop",
+  "scenario_id": "S4_POWER_DROP",
+  "scenario_zh": "电压过低导致刷写中止",
+  "seed": 1481441395,
+  "task_id": "TASK-10076",
+  "total_records": 25177,
+  "vin": "LSVA5EWY4SH024299",
+  "vin_last4": "4299"
+}

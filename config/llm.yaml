@@ -1,0 +1,71 @@
+# =====================================================================
+# 统一模型网关配置（机制：全部大模型流量唯一出口）
+# provider 由 VELA_LLM_PROVIDER 或本文件 active 决定
+# =====================================================================
+active: mock                 # mock | volcengine | openai_compat
+
+# 逻辑模型名 -> 各 provider 物理模型的映射（切换供应商不改业务代码）
+logical_models:
+  planner:   {temperature: 0.1, max_tokens: 1024, json_mode: true}
+  verifier:  {temperature: 0.0, max_tokens: 768,  json_mode: true}
+  reporter:  {temperature: 0.2, max_tokens: 2048, json_mode: false}
+  distiller: {temperature: 0.3, max_tokens: 1536, json_mode: true}
+
+providers:
+
+  mock:
+    kind: mock
+    # 确定性 mock：同输入必同输出，供离线测试/CI/评测使用
+    deterministic: true
+    latency_ms: 0
+    # 故障注入开关（用于验证"系统级引用校验"能否抓到幻觉）
+    inject_hallucinated_citations: false
+    inject_rate: 0.0
+
+  volcengine:                          # ★ 火山引擎方舟（Ark），优先适配
+    kind: openai_compatible
+    base_url_env: VELA_ARK_BASE_URL
+    base_url_default: "https://ark.cn-beijing.volces.com/api/v3"
+    api_key_env: VELA_ARK_API_KEY
+    chat_path: "/chat/completions"
+    embed_path: "/embeddings"
+    model_env: VELA_ARK_MODEL          # 填推理接入点 ID（ep-xxxxxxxx）或模型名
+    embed_model_env: VELA_ARK_EMBED_MODEL
+    model_default: ""
+    timeout_s: 120
+    max_retries: 2
+    retry_backoff_s: 1.5
+    # 故障降级链：主模型不可用时按序回退（逻辑模型名 -> 物理接入点由环境变量给）
+    fallback_chain: ["VELA_ARK_MODEL_FALLBACK", "VELA_OPENAI_MODEL"]
+
+  openai_compat:                       # vLLM / One-API / 自建网关 / 其它兼容端点
+    kind: openai_compatible
+    base_url_env: VELA_OPENAI_BASE_URL
+    base_url_default: ""
+    api_key_env: VELA_OPENAI_API_KEY
+    chat_path: "/chat/completions"
+    embed_path: "/embeddings"
+    model_env: VELA_OPENAI_MODEL
+    embed_model_env: VELA_OPENAI_EMBED_MODEL
+    model_default: ""
+    timeout_s: 120
+    max_retries: 2
+    retry_backoff_s: 1.5
+    fallback_chain: []
+
+# 出站脱敏：覆盖汽车数据敏感字段（VIN / 位置 / 手机号 / IMEI / 身份证 / 邮箱 / IP）
+redaction:
+  enabled: true
+  rules:
+    - {name: vin,    pattern: '\b[A-HJ-NPR-Z0-9]{17}\b',                repl: 'VIN_<M>'}
+    - {name: gps,    pattern: '\b(?:lat|lon|lng|latitude|longitude)\s*[=:]\s*-?\d{1,3}\.\d{3,}', repl: '<GEO>'}
+    - {name: phone,  pattern: '\b1[3-9]\d{9}\b',                        repl: '<PHONE>'}
+    - {name: imei,   pattern: '\bimei[=:]?\s*\d{15}\b',                 repl: 'imei=<IMEI>'}
+    - {name: idcard, pattern: '\b\d{17}[\dXx]\b',                       repl: '<IDCARD>'}
+    - {name: email,  pattern: '\b[\w.+-]+@[\w-]+\.[\w.]+\b',            repl: '<EMAIL>'}
+    - {name: ipv4,   pattern: '\b(?:\d{1,3}\.){3}\d{1,3}\b',            repl: '<IPV4>'}
+
+audit:
+  enabled: true
+  log_prompt: false        # 生产默认不落全量 prompt，仅落摘要与哈希
+  log_prompt_hash: true

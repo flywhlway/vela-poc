@@ -1,0 +1,163 @@
+# =====================================================================
+# 诊断技能库（知识平面种子）—— 机制三 两段式检索 / 机制七 知识自增强闭环
+# 不可变版本化：修改内容须 bump version，旧版本报告仍可解析
+# root_cause_label 用于评测口径对齐（黄金集真值标签）
+# =====================================================================
+skills:
+
+- id: SK-PHASE-OVERVIEW
+  version: 3
+  title: OTA 阶段全景与中断点定位
+  trigger: 任何 OTA 升级失败/卡住/无结果的首轮分析；需要先建立全局认知时
+  summary: 用阶段时间线与级别分布鸟瞰整个升级流程，确定在哪个阶段中断、哪个模块最先报错。
+  tags: [overview, phase, mandatory-first]
+  root_cause_label: null
+  tools: [describe_dataset, phase_timeline, timeline, aggregate]
+  probes:
+    - {tool: phase_timeline, args: {}}
+    - {tool: aggregate, args: {group_by: [ota_phase, level_norm], limit: 60}}
+    - {tool: timeline, args: {bucket: "1m", min_level: WARN}}
+  keywords: [ota, 升级, 阶段, 中断, 失败, 全景, phase, overview, timeline]
+
+- id: SK-DL-TIMEOUT
+  version: 2
+  title: 下载分片超时与 CDN 异常
+  trigger: DOWNLOAD 阶段出现 timeout / connection reset / chunk retry / 速率骤降
+  summary: 排查下载器分片重试、HTTP 状态码、链路速率与 CDN 节点切换，判定是否网络侧导致升级中止。
+  tags: [download, network]
+  root_cause_label: download_cdn_timeout
+  tools: [search_logs, top_templates, get_context, timeline]
+  probes:
+    - {tool: search_logs, args: {query: "timeout retry chunk", components: [downloader], min_level: WARN, limit: 120}}
+    - {tool: search_logs, args: {query: "HTTP", mode: substring, components: [downloader], limit: 120}}
+    - {tool: top_templates, args: {sort: error_only, components: [downloader], limit: 30}}
+  keywords: [download, 下载, chunk, 分片, timeout, 超时, cdn, http, retry, 重试, 网络]
+
+- id: SK-SIG-VERIFY
+  version: 2
+  title: 升级包签名与校验和失败
+  trigger: VERIFY 阶段出现 signature invalid / checksum mismatch / sha256 不一致
+  summary: 核对包完整性校验链路：下载完整性 → 签名验签 → 版本证书有效期，定位是包损坏还是证书问题。
+  tags: [verify, security]
+  root_cause_label: signature_verify_fail
+  tools: [search_logs, get_context, get_lines]
+  probes:
+    - {tool: search_logs, args: {query: "signature checksum verify invalid mismatch", min_level: WARN, limit: 100}}
+    - {tool: search_logs, args: {query: "sha256", mode: substring, limit: 60}}
+  keywords: [signature, 签名, checksum, 校验, sha256, 证书, certificate, verify, 完整性]
+
+- id: SK-UDS-NRC
+  version: 4
+  title: UDS 否定响应码（NRC）根因分析
+  trigger: TRANSFER/FLASH 阶段出现 NRC 0xXX、诊断请求被拒绝、块序号错误
+  summary: 按 NRC 语义字典解释否定响应码，结合请求时序（0x34/0x36/0x37/0x31）判定是 ECU 内部失败还是上位机时序缺陷。
+  tags: [uds, flash, protocol]
+  root_cause_label: uds_nrc_programming_failure
+  tools: [search_logs, error_code_lookup, get_context, aggregate]
+  probes:
+    - {tool: search_logs, args: {query: "NRC", mode: substring, components: [uds_stack, flash_agent], limit: 150}}
+    - {tool: aggregate, args: {group_by: [ecu_id, level_norm], filters: {components: [uds_stack]}, limit: 50}}
+  keywords: [uds, nrc, "0x72", "0x78", "0x33", transferdata, requestdownload, 刷写, 否定响应, 编程失败]
+
+- id: SK-POWER
+  version: 2
+  title: 电源电压不足导致刷写中止
+  trigger: 出现 voltage / battery / 电压 / NRC 0x93 / conditionsNotCorrect 前置条件不满足
+  summary: 关联电源管理模块电压曲线与刷写中止时刻，判定是否因蓄电池电压低于阈值触发保护性中止。
+  tags: [power, precondition]
+  root_cause_label: power_voltage_drop
+  tools: [search_logs, timeline, get_context]
+  probes:
+    - {tool: search_logs, args: {query: "voltage battery 电压 threshold", components: [power_mgr, uds_stack], limit: 100}}
+    - {tool: search_logs, args: {query: "0x93", mode: substring, limit: 50}}
+  keywords: [voltage, 电压, battery, 蓄电池, power, 电源, "0x93", 掉电, 前置条件]
+
+- id: SK-STORAGE
+  version: 2
+  title: 存储空间不足与写入失败
+  trigger: 出现 ENOSPC / no space / disk full / 空间不足 / mmc 写错误
+  summary: 检查下载缓存分区与 A/B 分区剩余空间、文件系统写错误与内核块设备报错。
+  tags: [storage, filesystem]
+  root_cause_label: storage_insufficient
+  tools: [search_logs, get_context, aggregate]
+  probes:
+    - {tool: search_logs, args: {query: "space insufficient ENOSPC full 空间", components: [storage_svc, kernel, downloader], limit: 100}}
+    - {tool: search_logs, args: {query: "mmc", mode: substring, components: [kernel], limit: 60}}
+  keywords: [storage, 存储, 空间, enospc, disk, full, 分区, mmc, 写入失败]
+
+- id: SK-ECU-SILENT
+  version: 3
+  title: ECU 无响应与日志静默区间
+  trigger: 某模块日志出现长时间空档、请求无响应、P2*Server 超时
+  summary: 用静默区间检测定位挂起点，结合请求-响应配对判断是 ECU 崩溃、总线断开还是主控卡死。
+  tags: [timeout, silence]
+  root_cause_label: ecu_no_response
+  tools: [find_gaps, search_logs, get_context, timeline]
+  probes:
+    - {tool: find_gaps, args: {min_gap_seconds: 20, limit: 30}}
+    - {tool: search_logs, args: {query: "no response timeout 无响应", min_level: WARN, limit: 100}}
+  keywords: [无响应, no response, 静默, gap, 挂起, hang, 超时, p2server, 总线]
+
+- id: SK-DEP-VER
+  version: 2
+  title: 依赖版本与兼容性不匹配
+  trigger: 出现 version mismatch / dependency / precondition failed / 兼容性检查未通过
+  summary: 比对目标 ECU 当前版本、包内依赖声明与整车依赖矩阵，定位版本前置条件冲突。
+  tags: [dependency, compatibility]
+  root_cause_label: dependency_mismatch
+  tools: [search_logs, aggregate, get_lines]
+  probes:
+    - {tool: search_logs, args: {query: "version mismatch dependency 依赖 兼容", min_level: WARN, limit: 100}}
+    - {tool: aggregate, args: {group_by: [ecu_id], limit: 40}}
+  keywords: [version, 版本, dependency, 依赖, mismatch, 不匹配, 兼容性, precondition]
+
+- id: SK-ROLLBACK
+  version: 2
+  title: 激活失败与回滚链分析
+  trigger: ACTIVATE 阶段失败、出现 rollback / revert / 回滚 / 分区切换失败
+  summary: 还原激活—自检—回滚的完整链路，判定回滚是根因的结果还是回滚本身失败导致变砖风险。
+  tags: [activate, rollback]
+  root_cause_label: activate_rollback
+  tools: [phase_timeline, search_logs, get_context]
+  probes:
+    - {tool: search_logs, args: {query: "rollback revert activate 回滚 激活", limit: 100}}
+    - {tool: phase_timeline, args: {}}
+  keywords: [rollback, 回滚, activate, 激活, revert, 分区, slot, bank, 自检]
+
+- id: SK-TIMEBASE
+  version: 3
+  title: 时间基准异常与跨模块时序可信度
+  trigger: 需要跨 ECU/模块做因果排序，或发现时间倒退、时钟跳变、无年份时间戳
+  summary: 检查 ts_kind / ts_confidence / clock_epoch 分布，判断跨模块先后关系是否可用于因果结论。
+  tags: [timebase, quality]
+  root_cause_label: time_sync_drift
+  tools: [aggregate, search_logs, timeline]
+  probes:
+    - {tool: aggregate, args: {group_by: [component, ts_kind], limit: 60}}
+    - {tool: search_logs, args: {query: "clock time sync 时间 同步", limit: 60}}
+  keywords: [时间, 时钟, clock, 时序, timestamp, 跳变, 置信度, 同步, ntp, time, sync, drift, anomaly]
+
+- id: SK-STORM
+  version: 2
+  title: 日志风暴与重试放大
+  trigger: 单模板短时间内刷屏、重试次数异常增长、日志量陡增
+  summary: 用模板聚合识别风暴模板，判断是错误放大（症状）还是重试风暴本身耗尽资源（根因）。
+  tags: [storm, template]
+  root_cause_label: null
+  tools: [top_templates, timeline, aggregate]
+  probes:
+    - {tool: top_templates, args: {sort: frequent, limit: 30}}
+    - {tool: timeline, args: {bucket: "10s"}}
+  keywords: [风暴, storm, 刷屏, 重试, retry, 模板, 放大, 频次]
+
+- id: SK-NET-LINK
+  version: 2
+  title: TBOX 链路抖动与云端连接异常
+  trigger: 出现 disconnect / reconnect / MQTT / TLS handshake / 信号强度骤降
+  summary: 排查车云链路稳定性，区分"下载慢"是链路质量问题还是服务端限速。
+  tags: [network, tbox]
+  root_cause_label: download_cdn_timeout
+  tools: [search_logs, timeline, get_context]
+  probes:
+    - {tool: search_logs, args: {query: "disconnect reconnect mqtt tls signal 链路", components: [tbox_comm], limit: 100}}
+  keywords: [tbox, 链路, mqtt, tls, 断连, disconnect, 信号, rsrp, 4g, 5g]

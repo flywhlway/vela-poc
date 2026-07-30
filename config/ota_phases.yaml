@@ -1,0 +1,41 @@
+# =====================================================================
+# OTA 阶段识别规则（前向填充） —— 对应技术方案 §14.2
+# 顺序即优先级；命中任一 any_of 正则（大小写不敏感）即打该阶段标签
+# =====================================================================
+ota_phase_rules:
+  - phase: INIT
+    any_of: ['ota (?:service|master) start', '升级服务启动', 'OtaManager.*init', 'session begin']
+  - phase: QUERY
+    any_of: ['check(?:ing)? (?:for )?update', '查询升级', 'campaign query', 'policy fetched']
+  - phase: DOWNLOAD
+    any_of: ['start download', 'download(?:ing)? (?:chunk|package)', '开始下载', 'HTTP GET .*\.(?:bin|zip|upd)']
+  - phase: VERIFY
+    any_of: ['verify(?:ing)? (?:signature|checksum|hash)', '校验', 'signature (?:ok|valid|invalid)', 'sha256 match']
+  - phase: TRANSFER
+    any_of: ['RequestDownload', '0x34', 'TransferData', '0x36', 'block \d+ */ *\d+', 'RequestTransferExit', '0x37']
+  - phase: FLASH
+    any_of: ['(?:start )?flash(?:ing)?', 'erase (?:flash|sector)', 'programming (?:start|dependency)', '0x31', 'RoutineControl']
+  - phase: ACTIVATE
+    any_of: ['activate', 'ecu reset', '0x11', 'switch (?:to )?(?:new )?(?:bank|slot)', '激活']
+  - phase: ROLLBACK
+    any_of: ['rollback', 'revert', '回滚', 'restore (?:previous|backup)']
+  - phase: REPORT
+    any_of: ['report (?:result|status) to (?:tsp|cloud)', '上报结果', 'campaign result']
+
+# UDS NRC 语义字典（诊断领域先验，供 error_code_lookup 工具使用）
+uds_nrc:
+  "0x10": {name: generalReject,                 hint: "ECU 一般性拒绝，通常伴随内部状态异常"}
+  "0x11": {name: serviceNotSupported,           hint: "服务不支持，多为诊断会话/版本不匹配"}
+  "0x13": {name: incorrectMessageLength,        hint: "报文长度错误，检查刷写块大小协商"}
+  "0x22": {name: conditionsNotCorrect,          hint: "前置条件不满足：电压/车速/挡位/会话未就绪"}
+  "0x24": {name: requestSequenceError,          hint: "请求时序错误，0x34/0x36/0x37 顺序被打断"}
+  "0x31": {name: requestOutOfRange,             hint: "地址或长度越界，检查刷写地址表与分区"}
+  "0x33": {name: securityAccessDenied,          hint: "安全访问未通过，种子密钥算法或等级不匹配"}
+  "0x36": {name: exceedNumberOfAttempts,        hint: "安全访问尝试次数超限"}
+  "0x37": {name: requiredTimeDelayNotExpired,   hint: "安全访问延迟未到期"}
+  "0x71": {name: transferDataSuspended,         hint: "传输被挂起，常见于总线拥塞或 ECU 忙"}
+  "0x72": {name: generalProgrammingFailure,     hint: "编程失败，多为 Flash 擦写错误/坏块/掉电"}
+  "0x73": {name: wrongBlockSequenceCounter,     hint: "块序号错误，传输丢包或重传处理缺陷"}
+  "0x78": {name: responsePending,               hint: "响应挂起（正常忙等），连续过多需关注耗时"}
+  "0x92": {name: voltageTooHigh,                hint: "电压过高，禁止刷写"}
+  "0x93": {name: voltageTooLow,                 hint: "电压过低，禁止刷写；检查电源管理与充电状态"}
