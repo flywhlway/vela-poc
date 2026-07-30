@@ -3,3 +3,5 @@ duckdb>=1.0
 pyarrow>=14
 PyYAML>=6.0
 pytz>=2024.1        # DuckDB 返回 TIMESTAMPTZ 到 Python 时需要
+python-dotenv>=1.0  # .env 加载失败即 ENV-01 失败，不设静默降级路径
+openai>=1.40        # volcengine / openai_compat provider 的唯一实现基座，缺失时 provider 无法工作

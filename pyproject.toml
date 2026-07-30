@@ -13,6 +13,8 @@ dependencies = [
   "pyarrow>=14",
   "PyYAML>=6.0",
   "pytz>=2024.1",
+  "python-dotenv>=1.0",
+  "openai>=1.40",
 ]
 
 [project.optional-dependencies]
@@ -32,8 +34,9 @@ vela = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q --strict-markers"
+addopts = "-q --strict-markers -m 'not realllm'"
 markers = [
   "slow: 端到端较慢用例",
   "determinism: 确定性回归用例",
+  "realllm: 需要真实 LLM 端点的付费用例（默认排除，显式 -m realllm 才跑）",
 ]
