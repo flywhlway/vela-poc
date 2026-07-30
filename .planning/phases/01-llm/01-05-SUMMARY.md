@@ -75,7 +75,7 @@ completed: 2026-07-30
 4. **Task 2 GREEN: env_checks.yaml + EnvChecker** - `00b8d55` (feat)
 5. **Task 3: 清理 .env.example** - `bca9d21` (chore)
 
-**Plan metadata:**  (docs: complete plan)
+**Plan metadata:** `99f485d` (docs: complete plan)
 
 ## 供 Plan 06 消费：`EnvChecker.run()` 契约
 
