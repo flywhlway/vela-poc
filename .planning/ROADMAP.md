@@ -38,7 +38,7 @@
 - [x] 01-03-PLAN.md — `.env` 模块导入期静默加载（override=False）+ conftest 测试作用域锁定 + 优先级/锚点/静默性护栏
 - [x] 01-04-PLAN.md — openai 官方 SDK 重写 provider + probe() 探测原语 + llm.yaml 死键清理 + 受影响用例改写
 - [x] 01-05-PLAN.md — mask_secret 掩码 + config/env_checks.yaml 规则表 + EnvChecker 模块 + .env.example 注释清理
-- [ ] 01-06-PLAN.md — `vela doctor` 四项连通性自检 + 双通道渲染 + 退出码分层 + --offline/--online/--json
+- [x] 01-06-PLAN.md — `vela doctor` 四项连通性自检 + 双通道渲染 + 退出码分层 + --offline/--online/--json
 - [ ] 01-07-PLAN.md — realllm 标记端到端验收用例 + 生产接入文档三处口径对齐
 - [ ] 01-08-PLAN.md — 一票否决回归门（177 测试 + 仿真基准回归数 0 + 演示链路）+ 真实环境实测验收
 
@@ -131,7 +131,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. 真实 LLM 环境就绪 | 5/8 | In Progress|  |
+| 1. 真实 LLM 环境就绪 | 6/8 | In Progress|  |
 | 2. 度量可信与真实基线 | 0/TBD | Not started | - |
 | 3. 编排层逻辑止血 | 0/TBD | Not started | - |
 | 4. 去循环耦合与反馈闭环 | 0/TBD | Not started | - |

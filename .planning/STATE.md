@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: 真实 LLM 生产级可信化与双驱动架构升级
 status: executing
-stopped_at: Completed 01-05-PLAN.md
-last_updated: "2026-07-30T23:32:45.824Z"
+stopped_at: Completed 01-06-PLAN.md
+last_updated: "2026-07-30T23:37:37.970Z"
 last_activity: 2026-07-30
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 8
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -19,11 +19,11 @@ progress:
 ## Current Position
 
 Phase: 01 (llm) — EXECUTING
-Plan: 6 of 8
+Plan: 7 of 8
 Status: Ready to execute
 Last activity: 2026-07-30
 
-**Progress:** [██████░░░░] 63%
+**Progress:** [████████░░] 75%
 
 ## Performance Metrics
 
@@ -34,6 +34,7 @@ Last activity: 2026-07-30
 | Phase 01-llm P03 | 3min | 3 tasks | 3 files |
 | Phase 01-llm P04 | 3min | 3 tasks | 4 files |
 | Phase 01-llm P05 | 3min | 3 tasks | 6 files |
+| Phase 01-llm P06 | 3min | 2 tasks | 2 files |
 
 ## Decisions
 
@@ -50,9 +51,11 @@ Last activity: 2026-07-30
 - [Phase 01]: probe() 返回固定五键 dict + 八类 SDK 异常归因表，供 Plan 06 doctor 用 hasattr 消费；不扩展 Provider 契约（01-04）
 - [Phase 01]: EnvChecker 放 src/vela/ 顶层；返回 {name,ok,detail,kind}；env_checks.yaml 不进 config_hash（01-05）
 - [Phase 01]: mask_secret：前 keep 后 keep + 固定 4 星，阈值 keep*2+4；掩码在 EnvChecker 数据层统一施加（01-05）
+- [Phase 01]: 跳过网络时前三项 warn 跳过；第 4 项仍本地 models_for，保证输出含四个逻辑模型名（01-06）
+- [Phase 01]: doctor --json 顶层键：vela_version/python/config_dir/config_hash/provider/probed/dotenv/checks/checks_passed/local_ok——供 Phase 2 环境指纹（01-06）
 
 ## Session
 
-Last session: 2026-07-30T23:32:45.819Z
-Stopped at: Completed 01-05-PLAN.md
+Last session: 2026-07-30T23:37:23.747Z
+Stopped at: Completed 01-06-PLAN.md
 Resume file: None

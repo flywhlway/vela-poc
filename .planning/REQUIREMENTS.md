@@ -20,7 +20,7 @@
 
 - [ ] **ENV-01**: 工程师运行任意 CLI 子命令或测试时，`.env` 中的配置被自动加载并生效，无需手工 `export`（用 python-dotenv 实现，见 D-01/D-03/D-05；已存在的进程环境变量优先级更高）
 - [ ] **ENV-02**: 工程师把 `VELA_LLM_PROVIDER` 切到 `volcengine` 后，`vela agent diagnose` 走真实火山引擎方舟端点完成一次端到端诊断并产出带引用的报告
-- [ ] **ENV-03**: 工程师运行 `vela doctor` 能看到真实 LLM 连通性自检结果（端点可达 / 鉴权有效 / 模型可用 / 四个逻辑模型映射完整），而不必先跑一次失败的诊断才发现配置错
+- [x] **ENV-03**: 工程师运行 `vela doctor` 能看到真实 LLM 连通性自检结果（端点可达 / 鉴权有效 / 模型可用 / 四个逻辑模型映射完整），而不必先跑一次失败的诊断才发现配置错
 - [x] **ENV-04**: 工程师能从 `vela doctor` 输出直接看出 `.env` 的配置形态错误（行尾注释污染值、`base_url` 路径异常），且 `.env.example` 不再含会被朴素解析吃进值的行尾注释
 
 ### METR —— 度量可信（先修尺子，ADR-2）
@@ -170,7 +170,7 @@
 |-------------|-------|--------|
 | ENV-01 | Phase 1 | Pending |
 | ENV-02 | Phase 1 | Pending |
-| ENV-03 | Phase 1 | Pending |
+| ENV-03 | Phase 1 | Complete |
 | ENV-04 | Phase 1 | Complete |
 | METR-01 | Phase 2 | Pending |
 | METR-02 | Phase 2 | Pending |
