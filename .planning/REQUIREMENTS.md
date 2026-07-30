@@ -168,12 +168,62 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| （待 roadmapper 填充） | — | Pending |
+| ENV-01 | Phase 1 | Pending |
+| ENV-02 | Phase 1 | Pending |
+| ENV-03 | Phase 1 | Pending |
+| ENV-04 | Phase 1 | Pending |
+| METR-01 | Phase 2 | Pending |
+| METR-02 | Phase 2 | Pending |
+| METR-03 | Phase 2 | Pending |
+| METR-04 | Phase 2 | Pending |
+| METR-05 | Phase 2 | Pending |
+| METR-06 | Phase 2 | Pending |
+| METR-07 | Phase 2 | Pending |
+| METR-08 | Phase 2 | Pending |
+| METR-09 | Phase 2 | Pending |
+| PERF-01 | Phase 2 | Pending |
+| PERF-02 | Phase 2 | Pending |
+| ORCH-01 | Phase 3 | Pending |
+| ORCH-02 | Phase 3 | Pending |
+| ORCH-03 | Phase 3 | Pending |
+| ORCH-04 | Phase 3 | Pending |
+| ORCH-05 | Phase 3 | Pending |
+| ORCH-06 | Phase 3 | Pending |
+| ORCH-07 | Phase 3 | Pending |
+| ORCH-08 | Phase 3 | Pending |
+| ORCH-09 | Phase 3 | Pending |
+| ORCH-10 | Phase 3 | Pending |
+| DECP-01 | Phase 4 | Pending |
+| DECP-02 | Phase 4 | Pending |
+| DECP-03 | Phase 4 | Pending |
+| DECP-04 | Phase 4 | Pending |
+| DECP-05 | Phase 4 | Pending |
+| DECP-06 | Phase 4 | Pending |
+| DECP-07 | Phase 4 | Pending |
+| CONF-01 | Phase 5 | Pending |
+| CONF-02 | Phase 5 | Pending |
+| CONF-03 | Phase 5 | Pending |
+| CONF-04 | Phase 5 | Pending |
+| CONF-05 | Phase 5 | Pending |
+| SKIL-01 | Phase 5 | Pending |
+| SKIL-02 | Phase 5 | Pending |
+| SKIL-03 | Phase 5 | Pending |
+| SKIL-04 | Phase 5 | Pending |
+| SKIL-05 | Phase 5 | Pending |
+| DUAL-01 | Phase 6 | Pending |
+| DUAL-02 | Phase 6 | Pending |
+| DUAL-03 | Phase 6 | Pending |
+| DUAL-04 | Phase 6 | Pending |
+| DUAL-05 | Phase 6 | Pending |
+| DUAL-06 | Phase 6 | Pending |
+| DUAL-07 | Phase 6 | Pending |
+| DUAL-08 | Phase 6 | Pending |
+| DUAL-09 | Phase 6 | Pending |
 
 **Coverage:**
-- v1.1 requirements: 50 total
-- Mapped to phases: 0
-- Unmapped: 50 ⚠️
+- v1.1 requirements: 51 total（订正：原 Coverage 计数曾误记为 50，roadmapper 逐条核实全部 REQ-ID 后确认实际为 51 条，已在此更正）
+- Mapped to phases: 51
+- Unmapped: 0 ✓
 
 ---
 
@@ -207,4 +257,4 @@
 ---
 
 *Requirements defined: 2026-07-31*
-*Last updated: 2026-07-31 after v1.1 milestone start*
+*Last updated: 2026-07-31 after ROADMAP.md created — Traceability 补全，50→51 计数订正*
