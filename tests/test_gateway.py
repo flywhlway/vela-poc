@@ -172,3 +172,87 @@ def test_volcengine_provider_is_openai_compatible_subclass():
     from vela.gateway.openai_compat import OpenAICompatProvider
     from vela.gateway.volcengine import VolcengineArkProvider
     assert issubclass(VolcengineArkProvider, OpenAICompatProvider)
+
+
+def _stub_chat_client(exc: BaseException):
+    """构造 chat.completions.create 会抛指定异常的桩客户端（零网络）。"""
+    class _Completions:
+        def create(self, **_kwargs):
+            raise exc
+
+    class _Chat:
+        completions = _Completions()
+
+    class _Client:
+        chat = _Chat()
+
+    return _Client()
+
+
+def test_openai_compat_wraps_sdk_error_into_llm_error(monkeypatch):
+    """SDK 异常基类被捕获并包成 LLMError，消息以异常类名开头。"""
+    import openai
+    from vela.gateway.base import LLMError, LLMRequest
+    from vela.gateway.openai_compat import OpenAICompatProvider
+
+    class FakeSDKError(openai.OpenAIError):
+        pass
+
+    monkeypatch.setenv("VELA_TEST_BASE", "https://example.invalid/v1")
+    monkeypatch.setenv("VELA_TEST_KEY", "DUMMY-KEY-0123456789")
+    p = OpenAICompatProvider(
+        {"base_url_env": "VELA_TEST_BASE", "api_key_env": "VELA_TEST_KEY"},
+        name="openai_compat",
+    )
+    monkeypatch.setattr(p, "_client", lambda: _stub_chat_client(FakeSDKError("boom")))
+    with pytest.raises(LLMError) as ei:
+        p.complete(LLMRequest(logical_model="planner", user="hi"), "ep-x", {})
+    assert str(ei.value).startswith("FakeSDKError:")
+
+
+def test_openai_compat_probe_attributes_sdk_exceptions(monkeypatch):
+    """probe() 按 SDK 异常类型归因：401/404/429 三元结论与归因表一致。"""
+    import httpx
+    import openai
+    from vela.gateway.openai_compat import OpenAICompatProvider
+
+    monkeypatch.setenv("VELA_TEST_BASE", "https://example.invalid/v1")
+    monkeypatch.setenv("VELA_TEST_KEY", "DUMMY-KEY-0123456789")
+    cfg = {"base_url_env": "VELA_TEST_BASE", "api_key_env": "VELA_TEST_KEY"}
+    req = httpx.Request("POST", "http://x")
+
+    cases = [
+        (openai.AuthenticationError(
+            message="x", response=httpx.Response(401, request=req), body=None),
+         dict(reachable=True, authenticated=False, model_ok=False)),
+        (openai.NotFoundError(
+            message="x", response=httpx.Response(404, request=req), body=None),
+         dict(reachable=True, authenticated=True, model_ok=False)),
+        (openai.RateLimitError(
+            message="x", response=httpx.Response(429, request=req), body=None),
+         dict(reachable=True, authenticated=True, model_ok=True)),
+    ]
+    for exc, expected in cases:
+        p = OpenAICompatProvider(cfg, name="openai_compat")
+        monkeypatch.setattr(p, "_client", lambda e=exc: _stub_chat_client(e))
+        result = p.probe("ep-x")
+        for k, v in expected.items():
+            assert result[k] is v, (type(exc).__name__, k, result)
+
+
+def test_openai_compat_probe_detail_masks_api_key(monkeypatch):
+    """probe().detail 不得泄露 api_key 明文。"""
+    import openai
+    from vela.gateway.openai_compat import OpenAICompatProvider
+
+    key = "DUMMY-KEY-0123456789"
+    monkeypatch.setenv("VELA_TEST_BASE", "https://example.invalid/v1")
+    monkeypatch.setenv("VELA_TEST_KEY", key)
+    p = OpenAICompatProvider(
+        {"base_url_env": "VELA_TEST_BASE", "api_key_env": "VELA_TEST_KEY"},
+        name="openai_compat",
+    )
+    leak = openai.OpenAIError(f"auth failed with key={key}")
+    monkeypatch.setattr(p, "_client", lambda: _stub_chat_client(leak))
+    detail = p.probe("ep-x")["detail"]
+    assert key not in detail

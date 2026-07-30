@@ -27,14 +27,14 @@ providers:
     base_url_env: VELA_ARK_BASE_URL
     base_url_default: "https://ark.cn-beijing.volces.com/api/v3"
     api_key_env: VELA_ARK_API_KEY
-    chat_path: "/chat/completions"
-    embed_path: "/embeddings"
+    # 请求路径由 openai SDK 内置（chat/embeddings），故 base_url 必须含版本前缀（方舟为 /api/v3）。
+    # 退避策略由 SDK 内置不可配；可调项仅下方超时秒数与最大重试次数（映射到 SDK 同名参数）。
+    # 换 SDK 后失效的路径/退避配置键已删除——留着的死键会诱导运维改不生效的值。
     model_env: VELA_ARK_MODEL          # 填推理接入点 ID（ep-xxxxxxxx）或模型名
     embed_model_env: VELA_ARK_EMBED_MODEL
     model_default: ""
     timeout_s: 120
     max_retries: 2
-    retry_backoff_s: 1.5
     # 故障降级链：主模型不可用时按序回退（逻辑模型名 -> 物理接入点由环境变量给）
     fallback_chain: ["VELA_ARK_MODEL_FALLBACK", "VELA_OPENAI_MODEL"]
 
@@ -43,14 +43,14 @@ providers:
     base_url_env: VELA_OPENAI_BASE_URL
     base_url_default: ""
     api_key_env: VELA_OPENAI_API_KEY
-    chat_path: "/chat/completions"
-    embed_path: "/embeddings"
+    # 请求路径由 openai SDK 内置（chat/embeddings），故 base_url 必须含版本前缀。
+    # 退避策略由 SDK 内置不可配；可调项仅下方超时秒数与最大重试次数。
+    # 换 SDK 后失效的路径/退避配置键已删除——留着的死键会诱导运维改不生效的值。
     model_env: VELA_OPENAI_MODEL
     embed_model_env: VELA_OPENAI_EMBED_MODEL
     model_default: ""
     timeout_s: 120
     max_retries: 2
-    retry_backoff_s: 1.5
     fallback_chain: []
 
 # 出站脱敏：覆盖汽车数据敏感字段（VIN / 位置 / 手机号 / IMEI / 身份证 / 邮箱 / IP）
