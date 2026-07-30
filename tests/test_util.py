@@ -7,7 +7,7 @@ from vela.util.hashing import (fingerprint_algos, merkle_root, norm_hash, raw_ha
                                row_hash, sha256_bytes)
 from vela.util.ids import new_run_id, new_session_id, stable_id
 from vela.util.jsonl import append_jsonl, canonical_json, read_json, read_jsonl, write_json
-from vela.util.textutil import canonicalize, estimate_tokens, mask_vin, truncate
+from vela.util.textutil import canonicalize, estimate_tokens, mask_secret, mask_vin, truncate
 from vela.util.timeutil import bucket_seconds, floor_to_bucket, iso, parse_iso
 
 
@@ -76,6 +76,29 @@ def test_mask_vin_keeps_last4_and_hides_rest():
     vin = "LSVM3HNR4SC988574"
     m = mask_vin(vin)
     assert m.endswith("8574") and vin not in m
+
+
+def test_mask_secret_empty_returns_empty():
+    assert mask_secret("") == ""
+
+
+def test_mask_secret_short_fully_masked():
+    assert mask_secret("short") == "****"
+
+
+def test_mask_secret_prefix_suffix_and_fixed_stars():
+    sample = "DUMMY-KEY-0123456789ABCD"
+    m = mask_secret(sample)
+    assert m == "DUMM****ABCD"
+    assert m.count("*") == 4
+    assert "0123456789" not in m
+
+
+def test_mask_secret_keep_overrides_threshold():
+    sample = "DUMMY-ABCDEFGHIJKLMNOP"
+    # keep=6 → 阈值 16；长度 20 ≥ 16 → 前 6 + **** + 后 6
+    assert mask_secret(sample, keep=6) == "DUMMY-****KLMNOP"
+    assert mask_secret("DUMMY-SHORT", keep=6) == "****"  # len 11 < 16
 
 
 def test_truncate_reports_whether_it_cut():
