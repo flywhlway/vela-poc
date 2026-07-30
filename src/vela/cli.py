@@ -169,33 +169,173 @@ def cmd_serve(a) -> int:
 
 
 # ------------------------------------------------------------- doctor
+_LOGICAL_MODELS = ("planner", "verifier", "reporter", "distiller")
+_REQUIRED_MODS = ("duckdb", "pyarrow", "yaml", "dotenv", "openai")
+_OPTIONAL_MODS = ("xxhash", "blake3", "fastapi", "pytest")
+
+
+def _doctor_item(name: str, ok: bool, detail: str, *,
+                 kind: str = "local", warn: bool = False) -> dict:
+    return {"name": name, "ok": ok, "detail": detail, "kind": kind, "warn": warn}
+
+
+def _doctor_icon(c: dict) -> str:
+    if not c["ok"]:
+        return "❌"
+    return "⚠️ " if c.get("warn") else "✅"
+
+
 def cmd_doctor(a) -> int:
-    from vela.config import config_dir, config_hash, load_budget, load_skills
+    """环境自检：先收集 list[dict]，再双通道渲染（D-12~D-15 / D-18）。"""
+    from vela.config import (config_dir, config_hash, dotenv_report, load_budget,
+                             load_skills, load_yaml)
+    from vela.envcheck import EnvChecker
+    from vela.gateway.base import build_gateway
     from vela.util.hashing import fingerprint_algos
-    print(f"VELA {__version__}   Python {sys.version.split()[0]}")
-    print(f"config_dir : {config_dir()}")
-    ok = True
-    for name in ("pipeline.yaml", "parsers.yaml", "ota_phases.yaml", "budget.yaml", "llm.yaml"):
+
+    offline = bool(getattr(a, "offline", False))
+    online = bool(getattr(a, "online", False))
+    as_json = bool(getattr(a, "as_json", False))
+    if offline and online:
+        print("❌ --offline 与 --online 不能同时使用", file=sys.stderr)
+        return 2
+
+    llm_cfg = load_yaml("llm.yaml")
+    provider = os.environ.get("VELA_LLM_PROVIDER") or llm_cfg.get("active", "mock")
+    do_probe = online or (not offline and provider != "mock")
+
+    checks: list[dict] = []
+
+    # ---- 本地：配置文件存在性 ----
+    for name in ("pipeline.yaml", "parsers.yaml", "ota_phases.yaml",
+                 "budget.yaml", "llm.yaml"):
         p = config_dir() / name
-        icon = "✅" if p.exists() else "❌"
-        ok &= p.exists()
-        print(f"  {icon} {name}")
-    print(f"skills     : {len(load_skills())} 个")
-    b = load_budget()
-    print(f"budget     : profile={b.name} round_evidence={b.round_evidence_tokens} "
-          f"round_llm={b.round_llm_tokens} max_rounds={b.max_rounds}")
-    print(f"algos      : {fingerprint_algos()}")
-    print(f"config_hash: {config_hash()}")
-    print(f"provider   : {os.environ.get('VELA_LLM_PROVIDER', '(配置文件 active)')}")
-    for mod in ("duckdb", "pyarrow", "yaml", "xxhash", "blake3", "fastapi", "pytest"):
+        checks.append(_doctor_item(name, p.exists(),
+                                   str(p) if p.exists() else "缺失"))
+
+    # ---- 本地：必需 / 可选依赖 ----
+    for mod in _REQUIRED_MODS + _OPTIONAL_MODS:
         try:
             __import__(mod)
-            print(f"  ✅ {mod}")
+            checks.append(_doctor_item(f"module:{mod}", True, "已安装"))
         except ImportError:
-            req = mod in ("duckdb", "pyarrow", "yaml")
-            print(f"  {'❌' if req else '⚠️ '} {mod} {'(必需，缺失)' if req else '(可选，未安装，将降级)'}")
-            ok &= not req
-    return 0 if ok else 1
+            if mod in _REQUIRED_MODS:
+                checks.append(_doctor_item(
+                    f"module:{mod}", False, "必需，缺失"))
+            else:
+                checks.append(_doctor_item(
+                    f"module:{mod}", True, "可选，未安装，将降级", warn=True))
+
+    # ---- 本地：.env 形态（ENV-04 / D-16）----
+    for item in EnvChecker().run(provider):
+        item = dict(item)
+        item.setdefault("warn", False)
+        checks.append(item)
+
+    # ---- 连通性四项（D-12 / D-15）----
+    gw = build_gateway(provider)
+    prov = gw.provider
+    chains = {n: prov.models_for(n) for n in _LOGICAL_MODELS}
+    mapping_ok = all(bool(chains[n]) for n in _LOGICAL_MODELS)
+    mapping_detail = "; ".join(
+        f"{n}→{chains[n] if chains[n] else '(空)'}" for n in _LOGICAL_MODELS)
+
+    if not do_probe:
+        skip = f"provider={provider}，已跳过网络探测（--online 可强制）"
+        for name in ("端点可达", "鉴权有效", "模型可用"):
+            checks.append(_doctor_item(name, True, skip,
+                                       kind="connectivity", warn=True))
+        # 第 4 项零网络本地判定，始终展示四条逻辑模型链（验收需含模型名）
+        checks.append(_doctor_item(
+            "四个逻辑模型映射完整性", mapping_ok, mapping_detail,
+            kind="connectivity", warn=not mapping_ok))
+    elif not hasattr(prov, "probe"):
+        nodetail = f"provider={provider} 不支持网络探测"
+        for name in ("端点可达", "鉴权有效", "模型可用",
+                     "四个逻辑模型映射完整性"):
+            checks.append(_doctor_item(name, True, nodetail,
+                                       kind="connectivity", warn=True))
+    else:
+        physical: list[str] = []
+        seen: set[str] = set()
+        for n in _LOGICAL_MODELS:
+            for m in chains[n]:
+                if m not in seen:
+                    seen.add(m)
+                    physical.append(m)
+        if not physical:
+            agg_detail = "无物理模型可探测"
+            reachable = authenticated = model_ok = False
+        else:
+            results = [prov.probe(m) for m in physical]
+            reachable = all(r["reachable"] for r in results)
+            authenticated = all(r["authenticated"] for r in results)
+            model_ok = all(r["model_ok"] for r in results)
+            parts = []
+            for r in results:
+                ek, dt = r.get("error_kind") or "", r.get("detail") or ""
+                if ek or dt:
+                    parts.append(f"{ek}: {dt}".strip(": ").strip())
+            agg_detail = "; ".join(parts) if parts else "ok"
+        checks.append(_doctor_item(
+            "端点可达", reachable, agg_detail, kind="connectivity"))
+        checks.append(_doctor_item(
+            "鉴权有效", authenticated, agg_detail, kind="connectivity"))
+        checks.append(_doctor_item(
+            "模型可用", model_ok, agg_detail, kind="connectivity"))
+        checks.append(_doctor_item(
+            "四个逻辑模型映射完整性", mapping_ok, mapping_detail,
+            kind="connectivity"))
+
+    dotenv = dotenv_report()
+    local_ok = all(c["ok"] for c in checks if c["kind"] == "local")
+    checks_passed = all(c["ok"] for c in checks)
+    chash = config_hash()
+    py_ver = sys.version.split()[0]
+    cdir = str(config_dir())
+
+    # ---- 双通道渲染（同一 checks 变量，D-18）----
+    if as_json:
+        _p({
+            "vela_version": __version__,
+            "python": py_ver,
+            "config_dir": cdir,
+            "config_hash": chash,
+            "provider": provider,
+            "probed": do_probe and hasattr(prov, "probe"),
+            "dotenv": {
+                "path": dotenv.get("path"),
+                "loaded": dotenv.get("loaded"),
+                "keys": list(dotenv.get("keys") or []),
+                "shadowed": list(dotenv.get("shadowed") or []),
+            },
+            "checks": checks,
+            "checks_passed": checks_passed,
+            "local_ok": local_ok,
+        })
+    else:
+        print(f"VELA {__version__}   Python {py_ver}")
+        print(f"config_dir : {cdir}")
+        b = load_budget()
+        print(f"skills     : {len(load_skills())} 个")
+        print(f"budget     : profile={b.name} round_evidence={b.round_evidence_tokens} "
+              f"round_llm={b.round_llm_tokens} max_rounds={b.max_rounds}")
+        print(f"algos      : {fingerprint_algos()}")
+        print(f"config_hash: {chash}")
+        print(f"provider   : {provider}")
+        shadowed = dotenv.get("shadowed") or []
+        print(f".env       : path={dotenv.get('path')} loaded={dotenv.get('loaded')} "
+              f"keys={len(dotenv.get('keys') or [])} shadowed={shadowed}")
+        print("checks:")
+        for c in checks:
+            print(f"  {_doctor_icon(c)} {c['name']}: {c['detail']}")
+
+    # D-14 有意偏离本文件「失败即非零」惯例（build/query/agent/eval/evidence）：
+    # 连通性失败标 ❌ 但返 0，避免 run_all.sh:7 set -euo pipefail + :31 第 1 步
+    # doctor 因限流/断网中断整条演示链路。消费方：Makefile:41-42、
+    # tests/test_cli_and_server.py:9-13。仅 local 硬错误返 1。
+    local_bad = any(not c["ok"] for c in checks if c["kind"] == "local")
+    return 1 if local_bad else 0
 
 
 # --------------------------------------------------------------- main
@@ -266,6 +406,12 @@ def build_parser() -> argparse.ArgumentParser:
     sv.set_defaults(func=cmd_serve)
 
     dr = sub.add_parser("doctor", help="环境自检")
+    dr.add_argument("--offline", action="store_true",
+                    help="强制跳过全部网络探测")
+    dr.add_argument("--online", action="store_true",
+                    help="强制执行网络探测（即使 provider 是 mock）")
+    dr.add_argument("--json", dest="as_json", action="store_true",
+                    help="以纯 JSON 输出检查结果（供评测/脚本消费）")
     dr.set_defaults(func=cmd_doctor)
     return ap
 
