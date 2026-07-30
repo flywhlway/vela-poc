@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: 真实 LLM 生产级可信化与双驱动架构升级
 status: executing
-stopped_at: Completed 01-06-PLAN.md
-last_updated: "2026-07-30T23:37:37.970Z"
+stopped_at: Completed 01-07-PLAN.md
+last_updated: "2026-07-30T23:42:34.451Z"
 last_activity: 2026-07-30
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
   percent: 0
 ---
 
@@ -19,11 +19,11 @@ progress:
 ## Current Position
 
 Phase: 01 (llm) — EXECUTING
-Plan: 7 of 8
+Plan: 8 of 8
 Status: Ready to execute
 Last activity: 2026-07-30
 
-**Progress:** [████████░░] 75%
+**Progress:** [█████████░] 88%
 
 ## Performance Metrics
 
@@ -35,6 +35,7 @@ Last activity: 2026-07-30
 | Phase 01-llm P04 | 3min | 3 tasks | 4 files |
 | Phase 01-llm P05 | 3min | 3 tasks | 6 files |
 | Phase 01-llm P06 | 3min | 2 tasks | 2 files |
+| Phase 01-llm P07 | 3min | 2 tasks | 2 files |
 
 ## Decisions
 
@@ -53,9 +54,11 @@ Last activity: 2026-07-30
 - [Phase 01]: mask_secret：前 keep 后 keep + 固定 4 星，阈值 keep*2+4；掩码在 EnvChecker 数据层统一施加（01-05）
 - [Phase 01]: 跳过网络时前三项 warn 跳过；第 4 项仍本地 models_for，保证输出含四个逻辑模型名（01-06）
 - [Phase 01]: doctor --json 顶层键：vela_version/python/config_dir/config_hash/provider/probed/dotenv/checks/checks_passed/local_ok——供 Phase 2 环境指纹（01-06）
+- [Phase 01]: rc∈{0,3} 均视为 diagnose 链路走完；不把 rc==0 作硬断言（D-19）（01-07）
+- [Phase 01]: 付费用例模块级 pytestmark=realllm + autouse 凭证守卫；报告取 sessions/*.state.json（01-07）
 
 ## Session
 
-Last session: 2026-07-30T23:37:23.747Z
-Stopped at: Completed 01-06-PLAN.md
+Last session: 2026-07-30T23:42:34.446Z
+Stopped at: Completed 01-07-PLAN.md
 Resume file: None
