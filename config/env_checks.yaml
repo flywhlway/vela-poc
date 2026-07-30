@@ -1,0 +1,78 @@
+# =====================================================================
+# 环境变量形态检查规则 —— 纯诊断用途（D-16 / ENV-04）
+# 本文件不进 config_hash，改它不影响推理结果与证据包指纹
+# 新增检查 = 追加一条 YAML，无需改代码
+# =====================================================================
+
+version: "1.0"
+
+# 对下方 variables 中每个「已设置」的值统一应用；任一命中即形态失败
+value_hygiene:
+  - name: inline_comment_residue
+    pattern: '\s+#'
+    hint: >-
+      值内含疑似行尾注释残留；python-dotenv 只会剥离未加引号值的行尾注释，
+      加引号的值不会被剥离——请把注释移到变量上一行
+  - name: edge_whitespace
+    pattern: '^\s|\s$'
+    hint: 值首尾含空白，可能导致匹配失败——请去掉多余空格
+  - name: wrapping_quotes
+    pattern: '^["''].*["'']$'
+    hint: 值被成对引号包裹，引号会成为值的一部分——请去掉外层引号
+
+variables:
+  - name: VELA_LLM_PROVIDER
+    display: plain
+    required_for_providers: []
+    pattern: '^(mock|volcengine|openai_compat)$'
+    hint: 须为 mock | volcengine | openai_compat 之一
+
+  - name: VELA_ARK_BASE_URL
+    display: plain
+    required_for_providers: [volcengine]
+    pattern: '.*/api/v3$'
+    hint: >-
+      正确形式为 https://ark.cn-beijing.volces.com/api/v3；
+      /api/plan/v3 是常见笔误，请将路径改为以 /api/v3 结尾
+
+  - name: VELA_ARK_API_KEY
+    display: masked
+    required_for_providers: [volcengine]
+    pattern: ''
+    hint: 请到火山方舟控制台 API Key 页创建并写入 VELA_ARK_API_KEY
+
+  - name: VELA_ARK_MODEL
+    display: plain
+    required_for_providers: [volcengine]
+    pattern: '^(ep-[A-Za-z0-9]+|[A-Za-z0-9._/-]+)$'
+    hint: 请填推理接入点 ID（ep-xxxxxxxx）或模型名
+
+  - name: VELA_ARK_EMBED_MODEL
+    display: plain
+    required_for_providers: []
+    pattern: '^(ep-[A-Za-z0-9]+|[A-Za-z0-9._/-]+)$'
+    hint: 可选；若设置请填向量接入点 ID 或模型名
+
+  - name: VELA_OPENAI_BASE_URL
+    display: plain
+    required_for_providers: [openai_compat]
+    pattern: '^https?://.+'
+    hint: openai_compat 模式下须设置可访问的 OpenAI 兼容端点 URL
+
+  - name: VELA_OPENAI_API_KEY
+    display: masked
+    required_for_providers: [openai_compat]
+    pattern: ''
+    hint: openai_compat 模式下须设置 VELA_OPENAI_API_KEY
+
+  - name: VELA_OPENAI_MODEL
+    display: plain
+    required_for_providers: [openai_compat]
+    pattern: '.+'
+    hint: openai_compat 模式下须设置默认模型名
+
+  - name: VELA_PROFILE
+    display: plain
+    required_for_providers: []
+    pattern: '^(poc|production)$'
+    hint: 须为 poc | production 之一（预算档位）
