@@ -4,14 +4,14 @@ milestone: v1.1
 milestone_name: 真实 LLM 生产级可信化与双驱动架构升级
 status: executing
 stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-07-30T23:24:13.281Z"
+last_updated: "2026-07-30T23:29:06.336Z"
 last_activity: 2026-07-30
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 8
-  completed_plans: 3
-  percent: 38
+  completed_plans: 4
+  percent: 0
 ---
 
 # Project State
@@ -19,11 +19,11 @@ progress:
 ## Current Position
 
 Phase: 01 (llm) — EXECUTING
-Plan: 4 of 8
+Plan: 5 of 8
 Status: Ready to execute
 Last activity: 2026-07-30
 
-**Progress:** [████░░░░░░] 38%
+**Progress:** [█████░░░░░] 50%
 
 ## Performance Metrics
 
@@ -32,6 +32,7 @@ Last activity: 2026-07-30
 | Phase 01-llm P02 | 6min | 2 tasks | 6 files |
 | Phase 01-llm P01 | 1min | 3 tasks | 3 files |
 | Phase 01-llm P03 | 3min | 3 tasks | 3 files |
+| Phase 01-llm P04 | 3min | 3 tasks | 4 files |
 
 ## Decisions
 
@@ -43,9 +44,12 @@ Last activity: 2026-07-30
 - [Phase 01]: dotenv_report() 契约固定为 {path, loaded, keys, shadowed}，只含键名绝不含值——供 Plan 06 doctor 直接消费（01-03）
 - [Phase 01]: ENV-01 实现主体已落地（config.py 导入期静默加载 + conftest 锁定），REQUIREMENTS.md 勾选仍留给 Plan 08 实测验收（01-03）
 - [Phase 01]: PYTHONHASHSEED 是 conftest 唯一保留的 setdefault——运行期赋值对哈希随机化无效（01-03）
+- [Phase 01]: Open Question 2：删除 llm.yaml 死键（chat_path/embed_path/retry_backoff_s），不保留注释标注失效——死键诱导运维改不生效的值（01-04）
+- [Phase 01]: Open Question 3：SDK 异常一律包成 LLMError 并继续走降级链，不引入不可重试中断（01-04）
+- [Phase 01]: probe() 返回固定五键 dict + 八类 SDK 异常归因表，供 Plan 06 doctor 用 hasattr 消费；不扩展 Provider 契约（01-04）
 
 ## Session
 
-Last session: 2026-07-30T23:24:13.276Z
+Last session: 2026-07-30T23:28:54.484Z
 Stopped at: Completed 01-03-PLAN.md
 Resume file: None
