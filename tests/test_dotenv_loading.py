@@ -81,6 +81,14 @@ def test_apply_dotenv_noop_when_root_is_none():
     assert result["shadowed"] == []
 
 
+def test_conftest_locks_provider_to_mock():
+    """回归用例：.env 在 pytest 收集期就会灌进 os.environ；若 conftest 用
+    setdefault，177 个既有用例会全部改打真实付费 API 且 determinism 用例大面积失败。
+    这是任何单个业务单元测试都抓不到的结构性漏洞——只有本断言能钉死
+    VELA_LLM_PROVIDER 在测试会话中恒为 mock。"""
+    assert os.environ["VELA_LLM_PROVIDER"] == "mock"
+
+
 def test_dotenv_report_does_not_leak_values():
     from vela.config import dotenv_report
 
