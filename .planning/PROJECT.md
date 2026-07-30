@@ -85,7 +85,7 @@ VELA 把海量、多格式、多编码的车端 OTA 升级日志，转化为**�
 
 ## Constraints
 
-- **Tech stack**: Python ≥ 3.11，`src/` 布局，运行期依赖仅 duckdb / pyarrow / PyYAML / pytz — 依赖最小化是既定纪律，新增依赖前先评估 stdlib 可行性
+- **Tech stack**: Python ≥ 3.11，`src/` 布局，运行期依赖 duckdb / pyarrow / PyYAML / pytz / python-dotenv / openai — 2026-07-31 Phase 1 讨论的 D-01 项目级永久变更：能用成熟三方开源库解决的一律不手写实现，新增依赖只需满足纯本地可安装、不引入必须联网才能跑通主链路的服务
 - **本地优先**: 无 Docker、无外部服务依赖，主链路必须能离线跑通 — POC 到生产的连续性保证
 - **单线程 / 单进程**: `AgentGraph.run()` 同步阻塞，DuckDB 以 `read_only=True` 单进程持有 — 本期不引入并发框架
 - **查询唯一收口**: Gold 库只经 `LogQueryAPI.call()` 访问 — 证据可追溯性的结构保证

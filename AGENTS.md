@@ -31,7 +31,7 @@ cp .env.example .env      # 环境变量全部可选，未设置时走 config/*.
 | `make serve DB=.../analysis.duckdb` | 本地 HTTP 服务（FastAPI，缺失时降级 stdlib） |
 | `make lint` | 仅 AST 语法检查（项目无 ruff/mypy 门禁） |
 
-pytest 标记：`slow`（端到端）、`determinism`（确定性回归，要求 `PYTHONHASHSEED=0`）。
+pytest 标记：`slow`（端到端）、`determinism`（确定性回归，要求 `PYTHONHASHSEED=0`）、`realllm`（需要真实 LLM 端点的付费用例，默认被 addopts 排除，显式 `-m realllm` 才跑）。
 
 ## 架构铁律（改动前必读）
 
@@ -44,7 +44,7 @@ pytest 标记：`slow`（端到端）、`determinism`（确定性回归，要求
 ## 代码约定
 
 - 单线程/单进程同步模型，不引入并发框架；DuckDB 以 `read_only=True` 连接。
-- 依赖最小化：运行期仅 duckdb / pyarrow / PyYAML / pytz，新增依赖前先评估能否用 stdlib 实现。
+- 三方库优先：能用成熟三方开源库解决的一律不手写实现（2026-07-31 Phase 1 D-01 项目级永久变更）；新增依赖只需满足纯本地可安装、不引入必须联网才能跑通主链路的服务。当前运行期依赖：duckdb / pyarrow / PyYAML / pytz / python-dotenv / openai。
 - 日志纪律：不使用 `logging` 模块；结构化事件走 `obs/events.py::EventBus`，CLI 输出用 `print()`。
 - 错误处理：分层显式 + 优雅降级（模型降级链 / `BudgetExceeded` → `unanswerable` / `ToolResult.notes` 负反馈），不吞异常。
 - 解析失败的日志标记状态码（`PARSE_UNPARSED` 等）入库留痕，不丢弃。
