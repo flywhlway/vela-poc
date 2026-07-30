@@ -130,3 +130,77 @@ class OpenAICompatProvider(Provider):
         except openai.OpenAIError as e:
             raise LLMError(f"{type(e).__name__}: {self._scrub(str(e))}") from e
         return [d.embedding for d in sorted(data.data, key=lambda x: x.index)]
+
+    def probe(self, physical_model: str) -> dict:
+        """最小 chat 探测：按 SDK 异常类型归因端点可达 / 鉴权有效 / 模型可用。
+
+        不属于 Provider 抽象契约；doctor（Plan 06）用 hasattr(provider, "probe") 判定。
+
+        安全约束：本方法不经 LLMGateway.chat()，因此不经 gateway/redact.py 脱敏。
+        可接受的前提是 prompt 为硬编码常量 ping，不含用户数据、日志或证据文本。
+        任何后续改动都不得把可变内容传进 probe 的 messages。
+        """
+        try:
+            self.ensure_credentials()
+        except LLMError as e:
+            return {
+                "reachable": False,
+                "authenticated": False,
+                "model_ok": False,
+                "error_kind": "MissingCredentials",
+                "detail": str(e),
+            }
+
+        try:
+            # 禁令：messages 内容必须保持硬编码常量，禁止参数化或拼接外部文本。
+            self._client().chat.completions.create(
+                model=physical_model,
+                messages=[{"role": "user", "content": "ping"}],
+                max_tokens=1,
+                temperature=0,
+            )
+            return {
+                "reachable": True,
+                "authenticated": True,
+                "model_ok": True,
+                "error_kind": "",
+                "detail": "",
+            }
+        except openai.APITimeoutError as e:
+            return self._probe_result(False, False, False, e, "端点超时")
+        except openai.APIConnectionError as e:
+            return self._probe_result(False, False, False, e, "端点不可达")
+        except openai.AuthenticationError as e:
+            return self._probe_result(True, False, False, e, "鉴权失败")
+        except openai.PermissionDeniedError as e:
+            return self._probe_result(True, False, False, e, "鉴权失败")
+        except openai.NotFoundError as e:
+            return self._probe_result(True, True, False, e, "模型不可用")
+        except openai.BadRequestError as e:
+            # BadRequestError：方舟对无效接入点 ID 常返 400 而非 404
+            return self._probe_result(True, True, False, e, "模型不可用")
+        except openai.RateLimitError as e:
+            # 限流意味着端点可达、鉴权通过、模型存在，只是配额受限
+            return self._probe_result(
+                True, True, True, e, "限流，未能完成最小调用")
+        except openai.InternalServerError as e:
+            return self._probe_result(True, True, False, e, "服务端错误")
+        except openai.OpenAIError as e:
+            return self._probe_result(True, False, False, e, "未分类 SDK 错误")
+
+    def _probe_result(
+        self,
+        reachable: bool,
+        authenticated: bool,
+        model_ok: bool,
+        exc: BaseException,
+        summary: str,
+    ) -> dict:
+        raw = self._scrub(str(exc))[:300]
+        return {
+            "reachable": reachable,
+            "authenticated": authenticated,
+            "model_ok": model_ok,
+            "error_kind": type(exc).__name__,
+            "detail": f"{summary}：{raw}" if raw else summary,
+        }
