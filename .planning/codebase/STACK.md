@@ -24,7 +24,7 @@
 ## Frameworks
 
 **Core:**
-- 无 Web/应用框架作为核心依赖；核心运行时依赖仅 4 个（见下），业务逻辑为纯 Python 标准库 + DuckDB
+- 无 Web/应用框架作为核心依赖；核心运行时依赖共 6 个（见下），业务逻辑为纯 Python 标准库 + DuckDB
 
 **Testing:**
 - pytest ≥8.0（可选依赖组 `dev`/`all`，见 `pyproject.toml`）
@@ -44,6 +44,8 @@
 - `pyarrow>=14` — Parquet 列式存储读写，供 DuckDB 与仿真数据集使用
 - `PyYAML>=6.0` — 全部 `config/*.yaml` 的解析，见 `src/vela/config.py::load_yaml`
 - `pytz>=2024.1` — DuckDB 返回 `TIMESTAMPTZ` 到 Python 时的时区处理（注释见 `requirements.txt`）
+- `python-dotenv>=1.0` — `.env` 自动加载，见 `src/vela/config.py`
+- `openai>=1.40` — OpenAI 兼容 provider 的 SDK 基座，见 `src/vela/gateway/openai_compat.py`
 
 **可选加速（`requirements-optional.txt`，缺失时自动降级，不影响功能）：**
 - `xxhash>=3.4` — `norm_hash`/`row_hash` 用 xxh3-64；缺失时回退 `hashlib.blake2b`（见 `src/vela/util/hashing.py`）
@@ -64,7 +66,8 @@
 - `VELA_WORKSPACE`（默认 `./workspace`）、`VELA_PROFILE`（`poc|production`）、`VELA_TENANT`（默认 `demo-tenant`）、`VELA_LOG_LEVEL`
 - `PYTHONHASHSEED=0` — 确定性要求，固定哈希种子（供仿真器/mock 供应商可复现输出）
 - `VELA_CONFIG_DIR` — 覆盖默认 `config/` 目录路径（见 `src/vela/config.py::config_dir`）
-- 加载优先级（`src/vela/config.py` 顶部注释）：显式函数参数 > 环境变量 > `config/*.yaml` > 代码内默认值；业务代码不直接读 `os.environ`，全部收敛在 `config.py`/`gateway/*`
+- `.env` 自动加载（D-06/D-08/D-09）：由 `src/vela/config.py` 在**模块导入时**自动加载一次，`override=False`（已存在的进程环境变量恒定优先）；加载过程完全静默，命中路径与被遮蔽的键名在 `vela doctor` 输出中呈现
+- 加载优先级（`src/vela/config.py` 顶部注释）：显式函数参数 > 进程环境变量 > .env > config/*.yaml > 代码内默认值；业务代码不直接读 `os.environ`，全部收敛在 `config.py`/`gateway/*`
 
 **Config files（`config/`，YAML 驱动，改行为不改代码）：**
 - `config/pipeline.yaml` — 解包/发现/解析/时间/模板/写出/QA 全部阈值

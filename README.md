@@ -117,7 +117,7 @@ pytest tests/ -q
 vela-poc/
 ├── README.md                      本文件
 ├── pyproject.toml                 包定义（name=vela, CLI 入口 vela=vela.cli:main）
-├── requirements.txt                必需依赖：duckdb / pyarrow / PyYAML / pytz
+├── requirements.txt                必需依赖：duckdb / pyarrow / PyYAML / pytz / python-dotenv / openai
 ├── requirements-optional.txt        可选加速/服务依赖：xxhash / blake3 / fastapi / uvicorn / pytest
 ├── .env.example                    环境变量样例（含火山引擎方舟接入变量）
 │

@@ -12,7 +12,7 @@ WORKSPACE ?= ./workspace
 
 help:
 	@echo "VELA 常用命令："
-	@echo "  make install       安装运行期依赖（duckdb/pyarrow/PyYAML/pytz）"
+	@echo "  make install       安装运行期依赖（duckdb/pyarrow/PyYAML/pytz/python-dotenv/openai）"
 	@echo "  make install-dev   安装含可选加速件与测试依赖（xxhash/blake3/fastapi/pytest）"
 	@echo "  make doctor        环境自检"
 	@echo "  make sim           生成 10 场景仿真数据集到 $(DATASET_DIR)"
