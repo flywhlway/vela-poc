@@ -84,7 +84,7 @@ completed: 2026-07-30
 3. **Task 2: conftest 作用域锁定** - `7e41fcf` (fix)
 4. **Task 3: provider 锁定护栏补齐** - `552ac46` (test)
 
-**Plan metadata:** （本 SUMMARY 提交后填写）
+**Plan metadata:** `4c8bad6` (docs: complete plan)
 
 ## Files Created/Modified
 
