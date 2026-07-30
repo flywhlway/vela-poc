@@ -106,7 +106,7 @@ completed: 2026-07-30
 2. **Task 2: 新增 probe() 探测原语并按 SDK 异常类型归因** - `94483e3` (feat)
 3. **Task 3: 清理 llm.yaml 死配置键并改写受影响的既有用例** - `a8066d3` (chore)
 
-**Plan metadata:** （见最终 docs 提交）
+**Plan metadata:** `5e7c567` (docs: complete plan)
 
 ## Files Created/Modified
 
