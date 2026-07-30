@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: 真实 LLM 生产级可信化与双驱动架构升级
 status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-07-30T23:19:00.440Z"
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-07-30T23:24:13.281Z"
 last_activity: 2026-07-30
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 8
-  completed_plans: 2
-  percent: 0
+  completed_plans: 3
+  percent: 38
 ---
 
 # Project State
@@ -19,11 +19,11 @@ progress:
 ## Current Position
 
 Phase: 01 (llm) — EXECUTING
-Plan: 3 of 8
+Plan: 4 of 8
 Status: Ready to execute
 Last activity: 2026-07-30
 
-**Progress:** [███░░░░░░░] 25%
+**Progress:** [████░░░░░░] 38%
 
 ## Performance Metrics
 
@@ -31,6 +31,7 @@ Last activity: 2026-07-30
 |-------|------|----------|-------|
 | Phase 01-llm P02 | 6min | 2 tasks | 6 files |
 | Phase 01-llm P01 | 1min | 3 tasks | 3 files |
+| Phase 01-llm P03 | 3min | 3 tasks | 3 files |
 
 ## Decisions
 
@@ -39,9 +40,12 @@ Last activity: 2026-07-30
 - [Phase 01]: ENV-01 由 Plan 01/02/03/08 共同交付，完成勾选留给 Plan 08 实测验收（01-02）
 - [Phase 01]: 解释器约定：所有 make/pytest 用 PYTHON=.venv/bin/python3（01-01） — 系统 python3 缺 duckdb/pyarrow；install-dev 装进 .venv，后续 Plan 沿用
 - [Phase 01]: python-dotenv/openai 为必需依赖（D-03），realllm 默认排除（D-19）（01-01） — Task2 人工 approved 后写入；付费用例默认不被 make test 收集
+- [Phase 01]: dotenv_report() 契约固定为 {path, loaded, keys, shadowed}，只含键名绝不含值——供 Plan 06 doctor 直接消费（01-03）
+- [Phase 01]: ENV-01 实现主体已落地（config.py 导入期静默加载 + conftest 锁定），REQUIREMENTS.md 勾选仍留给 Plan 08 实测验收（01-03）
+- [Phase 01]: PYTHONHASHSEED 是 conftest 唯一保留的 setdefault——运行期赋值对哈希随机化无效（01-03）
 
 ## Session
 
-Last session: 2026-07-30T23:18:37.250Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-07-30T23:24:13.276Z
+Stopped at: Completed 01-03-PLAN.md
 Resume file: None
