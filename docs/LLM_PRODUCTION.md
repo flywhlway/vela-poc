@@ -22,7 +22,7 @@
 ### 1. 准备工作
 
 1. 登录 [火山引擎控制台](https://console.volcengine.com/ark)，开通"方舟大模型服务"
-2. 创建推理接入点（Endpoint），选择需要的基础模型，记下接入点 ID（形如 `ep-20260101000000-xxxxx`）
+2. 创建推理接入点（Endpoint），选择需要的基础模型，记下接入点 ID（形如 `ep-xxxx`）
 3. 生成 API Key
 
 ### 2. 配置环境变量
@@ -37,7 +37,7 @@ cp .env.example .env
 VELA_LLM_PROVIDER=volcengine
 VELA_ARK_API_KEY=<你的 API Key>
 VELA_ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3   # 默认值，通常不用改
-VELA_ARK_MODEL=ep-20260101000000-xxxxx                        # 你的推理接入点 ID
+VELA_ARK_MODEL=ep-xxxx                                        # 你的推理接入点 ID
 ```
 
 `.env` 由 `src/vela/config.py` 在模块导入时自动加载一次（`override=False`，已存在的

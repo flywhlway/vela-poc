@@ -14,6 +14,15 @@ export VELA_CONFIG_DIR="$ROOT/config"
 export VELA_WORKSPACE="$ROOT/workspace/run_all"
 export PYTHONHASHSEED=0
 
+# 与 Makefile / Plan 01 解释器约定对齐：优先 PYTHON=，其次 .venv，最后系统 python3
+if [ -z "${PYTHON:-}" ]; then
+  if [ -x "$ROOT/.venv/bin/python3" ]; then
+    PYTHON="$ROOT/.venv/bin/python3"
+  else
+    PYTHON="python3"
+  fi
+fi
+
 DATASET_DIR="$ROOT/data/dataset"
 SKIP_TESTS=0
 SKIP_EVAL=0
@@ -28,13 +37,13 @@ done
 hr() { printf '\n%s\n  %s\n%s\n' "════════════════════════════════════════════════════════════════" "$1" "════════════════════════════════════════════════════════════════"; }
 
 hr "第 1/6 步：环境自检"
-python3 -m vela.cli doctor
+"$PYTHON" -m vela.cli doctor
 
 hr "第 2/6 步：生成仿真数据集（10 场景，约 23 万条记录）"
 if [ -d "$DATASET_DIR" ] && [ -n "$(ls -A "$DATASET_DIR"/*.zip 2>/dev/null)" ]; then
-  echo "数据集已存在于 $DATASET_DIR，跳过（如需重新生成请先删除该目录）"
+  echo "数据集已存在于 ${DATASET_DIR}，跳过（如需重新生成请先删除该目录）"
 else
-  python3 -m vela.cli sim generate --out "$DATASET_DIR"
+  "$PYTHON" -m vela.cli sim generate --out "$DATASET_DIR"
 fi
 
 hr "第 3/6 步：建立列式取证库（以 S3_UDS_NRC72 场景为例）"
@@ -42,17 +51,17 @@ DEMO_ARCHIVE=$(ls "$DATASET_DIR"/OTA_*TASK-10069*.zip 2>/dev/null | head -1 || t
 if [ -z "$DEMO_ARCHIVE" ]; then
   DEMO_ARCHIVE=$(ls "$DATASET_DIR"/*.zip | head -1)
 fi
-python3 -m vela.cli build "$DEMO_ARCHIVE" "$VELA_WORKSPACE/demo"
+"$PYTHON" -m vela.cli build "$DEMO_ARCHIVE" "$VELA_WORKSPACE/demo"
 
 hr "第 4/6 步：Agent 七节点诊断（provider=mock，确定性）"
-python3 -m vela.cli agent diagnose \
+"$PYTHON" -m vela.cli agent diagnose \
   --db "$VELA_WORKSPACE/demo/gold/analysis.duckdb" \
   --workspace "$VELA_WORKSPACE/demo" \
   --session-id "RUN-ALL-DEMO"
 
 if [ "$SKIP_EVAL" -eq 0 ]; then
   hr "第 5/6 步：黄金评测（全部 10 场景）"
-  python3 -m vela.cli eval run \
+  "$PYTHON" -m vela.cli eval run \
     --dataset "$DATASET_DIR" \
     --workspace "$VELA_WORKSPACE/eval" \
     --out "$VELA_WORKSPACE/eval/report"
@@ -62,7 +71,7 @@ fi
 
 if [ "$SKIP_TESTS" -eq 0 ]; then
   hr "第 6/6 步：全部单元/集成测试（177 个用例）"
-  python3 -m pytest tests/ -q
+  "$PYTHON" -m pytest tests/ -q
 else
   hr "第 6/6 步：跳过测试（--skip-tests）"
 fi
