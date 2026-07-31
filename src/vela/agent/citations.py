@@ -14,6 +14,9 @@ from dataclasses import dataclass, field
 
 CITE_RX = re.compile(r"\[\[EV:([0-9a-fA-F]{8,32})\]\]")
 TRAILER_RX = re.compile(r"<!--\s*citations:\s*(\[[^\]]*\])\s*-->")
+_HEADING_RX = re.compile(r"^\s*#{1,6}\s")
+_RULE_RX = re.compile(r"^\s*[-*_]{3,}\s*$")
+_SENTENCE_SPLIT_RX = re.compile(r"[。！？.!?\n]+")
 
 
 @dataclass
@@ -24,17 +27,46 @@ class CitationReport:
     unused_evidence: list[str] = field(default_factory=list)
 
     @property
-    def dangling_rate(self) -> float:
-        return round(len(self.dangling) / self.total, 4) if self.total else 0.0
+    def dangling_rate(self) -> float | None:
+        if self.total == 0:
+            return None
+        return round(len(self.dangling) / self.total, 4)
+
+    @property
+    def has_citations(self) -> bool:
+        return self.total > 0
 
     @property
     def ok(self) -> bool:
-        return not self.dangling
+        return self.has_citations and not self.dangling
 
     def to_dict(self) -> dict:
         return {"total_citations": self.total, "valid": len(self.valid),
                 "dangling": self.dangling, "dangling_rate": self.dangling_rate,
-                "unused_evidence_count": len(self.unused_evidence), "ok": self.ok}
+                "unused_evidence_count": len(self.unused_evidence),
+                "has_citations": self.has_citations, "ok": self.ok}
+
+
+def split_factual_sentences(text: str) -> list[str]:
+    """确定性启发式切分事实句：中英文句号/叹问号/换行；丢弃空串、标题、分隔线。"""
+    out: list[str] = []
+    for part in _SENTENCE_SPLIT_RX.split(text or ""):
+        s = part.strip()
+        if not s:
+            continue
+        if _HEADING_RX.match(s) or _RULE_RX.match(s):
+            continue
+        out.append(s)
+    return out
+
+
+def citation_coverage(text: str) -> float:
+    """含至少一个 [[EV:…]] 的事实句数 / 事实句总数；无事实句时返回 1.0。"""
+    sents = split_factual_sentences(text)
+    if not sents:
+        return 1.0
+    covered = sum(1 for s in sents if CITE_RX.search(s))
+    return round(covered / len(sents), 4)
 
 
 def extract_citations(text: str) -> list[str]:

@@ -1,7 +1,14 @@
 """推理平面：技能召回、压缩痕迹、引用校验、七节点图端到端。"""
 from __future__ import annotations
 
-from vela.agent.citations import extract_citations, strip_dangling, verify_citations
+from vela.agent.citations import (
+    CitationReport,
+    citation_coverage,
+    extract_citations,
+    split_factual_sentences,
+    strip_dangling,
+    verify_citations,
+)
 from vela.agent.compress import EvidenceCompressor
 from vela.agent.graph import AgentGraph
 from vela.agent.skills import SkillRegistry
@@ -156,6 +163,45 @@ def test_verify_citations_checks_db_when_api_given(api):
     rep2 = verify_citations("[[EV:0000000000000000]]", evidence_hashes=["0000000000000000"], api=api)
     assert not rep2.ok
     assert rep2.dangling[0]["reason"] == "NOT_FOUND_IN_DB"
+
+
+def test_zero_citation_report_fails_gate():
+    """METR-01/D-01/D-02：零引用必须 ok=False，dangling_rate 为 None。"""
+    rep = CitationReport(total=0)
+    assert rep.dangling_rate is None
+    assert rep.has_citations is False
+    assert rep.ok is False
+    d = rep.to_dict()
+    assert d["has_citations"] is False
+    assert d["dangling_rate"] is None
+    assert d["ok"] is False
+
+
+def test_citation_report_ok_with_valid_and_no_dangling():
+    rep = verify_citations("[[EV:cafebabe00000000]]", evidence_hashes=["cafebabe00000000"])
+    assert rep.has_citations is True
+    assert rep.dangling_rate == 0.0
+    assert rep.ok is True
+    assert rep.to_dict()["has_citations"] is True
+
+
+def test_citation_report_not_ok_when_dangling():
+    rep = verify_citations("[[EV:deadbeef00000000]]", evidence_hashes=["cafebabe00000000"])
+    assert rep.has_citations is True
+    assert rep.ok is False
+    assert rep.dangling_rate > 0
+
+
+def test_citation_coverage_empty_and_headings():
+    assert citation_coverage("") == 1.0
+    assert citation_coverage("# 标题\n\n---\n") == 1.0
+    assert split_factual_sentences("# 标题\n事实句。") == ["事实句"]
+
+
+def test_citation_coverage_counts_cited_sentences():
+    text = "无引用句。有引用 [[EV:aaaa1111bbbb2222]]。"
+    assert citation_coverage(text) == 0.5
+    assert citation_coverage("全覆盖 [[EV:aaaa1111bbbb2222]]。") == 1.0
 
 
 # --------------------------------------------------------------------- graph e2e
