@@ -460,18 +460,16 @@ def workspace_reusable(ws: Path) -> bool:
 
 **若表空则无需确认——本表非空：A1–A3 建议 planner 在任务中写死并单测，无需再开 discuss。**
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **`cmd_eval` 是否因 `has_citations==False` 直接非零退出？**
-   - What we know: METR-01 要求质量闸门失败；今日 exit 看聚合 dangling_rate 等。
-   - What's unclear: per-case 失败 vs 全局阈值。
-   - Recommendation: 报表+`cases[].citation_ok` 必达；全局 exit 增加「零引用用例数==0」或保持仅报表——**优先**把 `citation_ok` 纳入与 dangling 同级的聚合失败条件，并同步测试（仍保仿真回归数=0）。
+   - **RESOLVED（02-01-PLAN Task 2）：** 不新增零引用硬退出门。`citation_ok` / `zero_citation_cases` / `citation_coverage` 入报表与 metrics；`cmd_eval` 硬退出仍为原四条件（D-25）。质量闸门失败体现在 `CitationReport.ok=False` 与评测指标，不靠改 exit 契约。
 
 2. **scipy 放 optional 还是 required？**
-   - Recommendation: **optional `dev`/`all`**；`--repeat` 缺依赖时 CLI 清晰报错。不破坏离线 diagnose。
+   - **RESOLVED（02-04-PLAN Task 1）：** `optional-dependencies.eval = ["scipy>=1.11"]`，并入 `dev`/`all`；主链路（无 `--repeat`）禁止顶层 import；缺包时 CLI 提示 `pip install -e '.[eval]'`。
 
 3. **过程指标 `llm_parse_failure_rate` 在无 completion 落盘时如何取值？**
-   - Recommendation: 网关不强制 `log_prompt=true`；parse 代理 = planner 输出无法形成合法动作且 events 可见的比例，或 Phase 2 报表显示 `null` + 注释「待 ORCH-03 埋点」。可测性优先于假精度。
+   - **RESOLVED（02-05-PLAN Task 1）：** 用 events 代理（`plan.done` 且 skill is None 且 stop=False 且无 actions）；报表脚注「聚合自 events，Phase 3 前允许偏高 / 待 ORCH-03」。不强制 `log_prompt=true`。
 
 ## Environment Availability
 
