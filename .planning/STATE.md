@@ -23,7 +23,7 @@ Plan: Not started
 Status: Ready to plan
 Last activity: 2026-07-31
 
-**Progress:** [██░░░░░░░░] 17%（Phase 1 完成；Phase 2 规划完成）
+**Progress:** [███░░░░░░░] 33%（Phase 1–2 完成；待 discuss Phase 3）
 
 ## Performance Metrics
 
