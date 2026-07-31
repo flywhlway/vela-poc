@@ -4,3 +4,4 @@ blake3>=0.4      # 缺失 -> 回退 hashlib.blake2b(16B)，raw_hash 语义不变
 fastapi>=0.110   # 缺失 -> `vela serve` 回退到标准库 http.server
 uvicorn>=0.29
 pytest>=8.0      # 运行测试套件所需
+scipy>=1.11      # 评测 --repeat：Student t 95% CI（vela.eval.stats）；主链路不强制

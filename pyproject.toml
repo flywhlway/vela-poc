@@ -20,8 +20,9 @@ dependencies = [
 [project.optional-dependencies]
 fast = ["xxhash>=3.4", "blake3>=0.4"]
 serve = ["fastapi>=0.110", "uvicorn>=0.29"]
-dev = ["pytest>=8.0"]
-all = ["xxhash>=3.4", "blake3>=0.4", "fastapi>=0.110", "uvicorn>=0.29", "pytest>=8.0"]
+eval = ["scipy>=1.11"]
+dev = ["pytest>=8.0", "scipy>=1.11"]
+all = ["xxhash>=3.4", "blake3>=0.4", "fastapi>=0.110", "uvicorn>=0.29", "pytest>=8.0", "scipy>=1.11"]
 
 [project.scripts]
 vela = "vela.cli:main"
