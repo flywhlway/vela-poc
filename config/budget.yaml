@@ -52,3 +52,9 @@ profiles:
 token_estimate:
   bytes_per_token_ascii: 4.0
   bytes_per_token_cjk: 1.5
+
+# PERF-02：成本归集与告警（单价为占位；ALERT 不替代 token 硬切断）
+cost:
+  input_per_1k: 0.0          # USD / 1K prompt tokens
+  output_per_1k: 0.0         # USD / 1K completion tokens
+  diagnose_cost_alert: 1.0   # 会话估算成本超此值发 EventBus ALERT

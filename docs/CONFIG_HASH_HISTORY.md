@@ -5,6 +5,7 @@
 | date | old_hash | new_hash | added_inputs | reason |
 |------|----------|----------|--------------|--------|
 | 2026-07-31 | `sha256:32d709b34dfebf66c7545187b5e27eb5d2670e23182d2de314af572689ebef0a` | `sha256:7fe5f44c81d6a6c0f5e2e010505fad8b71d65913a5893e3821c3374d1afe574a` | `skills` via `load_skills()`；`budget.yaml`；`llm.yaml`；`gateway/prompts.py` → `prompts_sha256` | Phase 2 METR-03 / NR-6：首次扩展指纹覆盖（保留 pipeline/parsers/ota_phases/canon_rules/algos；继续排除 `env_checks.yaml`） |
+| 2026-07-31 | `sha256:7fe5f44c81d6a6c0f5e2e010505fad8b71d65913a5893e3821c3374d1afe574a` | `sha256:c1377375a18671772f4101bbdf4584dfb84ec9fc14ddd5a7981ecc375eba3c3e` | （口径不变；payload 内容变）`budget.yaml` 新增顶层 `cost:` | Phase 2 PERF-02：成本单价/告警阈值入配置，指纹随之变化 |
 
 采样命令（断代当日）：
 
