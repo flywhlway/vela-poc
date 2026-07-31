@@ -72,7 +72,7 @@
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — 引用闸门语义修正 + citation_coverage（METR-01/02）
+- [x] 02-01-PLAN.md — 引用闸门语义修正 + citation_coverage（METR-01/02）
 - [ ] 02-02-PLAN.md — config_hash 扩展与断代映射表（METR-03）
 - [ ] 02-03-PLAN.md — LLM 磁盘缓存 + TokenLedger 成本归集（METR-06/PERF-02）
 
@@ -176,7 +176,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. 真实 LLM 环境就绪 | 8/8 | Complete    | 2026-07-31 |
-| 2. 度量可信与真实基线 | 0/6 | Planned | - |
+| 2. 度量可信与真实基线 | 1/6 | In Progress|  |
 | 3. 编排层逻辑止血 | 0/TBD | Not started | - |
 | 4. 去循环耦合与反馈闭环 | 0/TBD | Not started | - |
 | 5. 置信度分级与技能治理 | 0/TBD | Not started | - |
