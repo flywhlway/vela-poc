@@ -177,7 +177,25 @@ def cmd_eval(a) -> int:
     if runs_metrics:
         payload["runs"] = runs_metrics
         payload["aggregate"] = aggregate
+    # 基线/指纹元数据（D-26）；无密钥
+    try:
+        from vela.config import config_hash
+        payload["meta"] = {
+            "config_hash": config_hash(),
+            "provider": m.get("provider") or a.provider,
+            "profile": m.get("profile") or a.profile,
+            "n": repeat or 1,
+            "no_cache": no_cache,
+            "reuse_workspace": bool(getattr(a, "reuse_workspace", False)),
+            "ablation": bool(getattr(a, "ablation", False)),
+        }
+    except Exception:
+        pass
     write_json(out / "eval_result.json", payload)
+    # 基线目录友好别名
+    if out.name == "baseline" or (out / "README.md").exists():
+        (out / "report.md").write_text(md, encoding="utf-8")
+        write_json(out / "result.json", payload)
     print("\n" + md)
     print(f"报告: {out/'eval_report.md'}\n明细: {out/'eval_result.json'}")
     dcr = m.get("dangling_citation_rate")
