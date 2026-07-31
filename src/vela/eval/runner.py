@@ -40,6 +40,9 @@ class CaseResult:
     diagnose_seconds: float = 0.0
     records: int = 0
     notes: list[str] = field(default_factory=list)
+    # 过程/消融聚合夹具（不进默认 JSON 也可；存于 CaseResult 供 EvalResult 消费）
+    process_bundle: dict = field(default_factory=dict, repr=False)
+    ablation: bool = False
 
 
 @dataclass

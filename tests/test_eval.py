@@ -177,15 +177,18 @@ def test_workspace_reusable_requires_three_conditions(tmp_path):
 
 
 def test_cli_eval_flags_and_repeat_lt2(tmp_path):
-    from vela.cli import build_parser, cmd_eval
+    from vela.cli import build_parser, cmd_eval, main
 
     p = build_parser()
-    help_txt = p.format_help()
-    assert "--repeat" in help_txt and "--reuse-workspace" in help_txt and "--no-cache" in help_txt
+    ns = p.parse_args(["eval", "run"])
+    assert hasattr(ns, "repeat") and hasattr(ns, "reuse_workspace") and hasattr(ns, "no_cache")
     a = p.parse_args(["eval", "run", "--repeat", "1",
                       "--dataset", str(tmp_path), "--workspace", str(tmp_path / "ws"),
                       "--out", str(tmp_path / "out")])
     assert cmd_eval(a) == 2
+    assert main(["eval", "run", "--repeat", "1",
+                 "--dataset", str(tmp_path), "--workspace", str(tmp_path / "ws"),
+                 "--out", str(tmp_path / "out")]) == 2
 
 
 def test_no_cache_sets_env_and_runner_flag(monkeypatch, tmp_path):
@@ -198,62 +201,6 @@ def test_no_cache_sets_env_and_runner_flag(monkeypatch, tmp_path):
         "--out", str(tmp_path / "out"),
     ])
     assert a.no_cache is True
-    # 构造 EvalRunner 参数契约（不跑全量评测）
     from vela.eval.runner import EvalRunner
     r = EvalRunner(tmp_path, tmp_path / "ws", cache_enabled=False)
     assert r.cache_enabled is False
-
-
-# --------------------------------------------------------------------- stats / reuse / repeat (Phase 2)
-def test_mean_std_ci_matches_scipy_expectation():
-    pytest = __import__("pytest")
-    scipy = pytest.importorskip("scipy")
-    from vela.eval.stats import mean_std_ci
-    vals = [1.0, 2.0, 3.0, 4.0]
-    st = mean_std_ci(vals)
-    assert st["n"] == 4
-    assert abs(st["mean"] - 2.5) < 1e-9
-    assert st["ci95"] is not None and st["ci95"][0] < st["mean"] < st["ci95"][1]
-
-
-def test_aggregate_metrics_over_runs():
-    pytest = __import__("pytest")
-    pytest.importorskip("scipy")
-    from vela.eval.stats import aggregate_metrics
-    runs = [
-        {"top1_root_cause_accuracy": 0.8, "false_positive_rate": 0.0},
-        {"top1_root_cause_accuracy": 1.0, "false_positive_rate": 0.0},
-    ]
-    agg = aggregate_metrics(runs)
-    assert "top1_root_cause_accuracy" in agg
-    assert abs(agg["top1_root_cause_accuracy"]["mean"] - 0.9) < 1e-9
-
-
-def test_workspace_reusable_requires_three_conditions(tmp_path):
-    from vela.eval.runner import EvalRunner
-    from vela.util.jsonl import write_json
-    ws = tmp_path / "case"
-    assert EvalRunner.workspace_reusable(ws) is False
-    (ws / "gold").mkdir(parents=True)
-    (ws / "gold" / "analysis.duckdb").write_bytes(b"x")
-    assert EvalRunner.workspace_reusable(ws) is False
-    write_json(ws / "manifest.json", {"ok": True})
-    assert EvalRunner.workspace_reusable(ws) is False
-    (ws / "qa").mkdir()
-    write_json(ws / "qa" / "qa_report.json", {"checks_passed": False})
-    assert EvalRunner.workspace_reusable(ws) is False
-    write_json(ws / "qa" / "qa_report.json", {"checks_passed": True})
-    assert EvalRunner.workspace_reusable(ws) is True
-
-
-def test_eval_runner_respects_no_cache_flag(tmp_path, dataset):
-    runner = EvalRunner(dataset["dir"], tmp_path / "eval_ws", provider="mock",
-                        profile="poc", cache_enabled=False)
-    assert runner.cache_enabled is False
-
-
-def test_cli_repeat_less_than_two_exits_two():
-    from vela.cli import main
-    rc = main(["eval", "run", "--repeat", "1", "--dataset", "/tmp/nope",
-               "--workspace", "/tmp/nope", "--out", "/tmp/nope"])
-    assert rc == 2
