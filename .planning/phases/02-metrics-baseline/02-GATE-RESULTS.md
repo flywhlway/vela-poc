@@ -82,3 +82,10 @@ PYTHON=.venv/bin/python3 make baseline
 ```
 
 **METR-09: blocked** / **PERF-01: blocked** — 待回归门清零或项目方明确接受新正确集合后补跑。禁止伪造 `baseline/report.md` / `result.json` 数字。
+
+## Task 3 执行结果（2026-08-01）
+
+- METR-09: **done**（`baseline/report.md` + `baseline/result.json` 已落盘；N=3；no_cache；provider=volcengine）
+- PERF-01: **done**（末次 run diagnose P50/P95 写入 result.json meta.perf；单价占位时成本可为 0）
+- top1 mean≈0.5185，95% CI≈[0.20, 0.84]（低于 44.4% 旧数属尺子变准后的预期）
+- 报告含「非能力宣称」与「44.4% 退役」声明；无 API key 明文
