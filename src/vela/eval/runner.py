@@ -5,6 +5,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from vela.agent.citations import citation_coverage
 from vela.agent.graph import AgentGraph
 from vela.eval.golden import GoldenCase, load_golden
 from vela.evidence.pipeline import build as build_evidence_db
@@ -29,7 +30,10 @@ class CaseResult:
     llm_tokens: int = 0
     evidence_kept: int = 0
     compression_ratio: float = 1.0
-    dangling_rate: float = 0.0
+    dangling_rate: float | None = None
+    has_citations: bool = False
+    citation_ok: bool = False
+    citation_coverage: float = 1.0
     illegal_skill_reselect: int = 0
     evidence_pack_ok: bool | None = None
     build_seconds: float = 0.0
@@ -68,6 +72,8 @@ class EvalResult:
         h = self.healthy_cases
         durs = [c.diagnose_seconds for c in self.cases]
         packs = [c for c in self.cases if c.evidence_pack_ok is not None]
+        cited = [c for c in self.cases if c.dangling_rate is not None]
+        zero_cite = sum(1 for c in self.cases if not c.has_citations)
         return {
             "cases_total": len(self.cases),
             "cases_faulty": len(f), "cases_healthy": len(h),
@@ -78,7 +84,18 @@ class EvalResult:
             "healthy_specificity": _r(sum(1 for c in h if _no_fault(c.predicted_label)) / len(h)) if h else 0.0,
             "false_positive_rate": _r(sum(1 for c in h if not _no_fault(c.predicted_label)) / len(h)) if h else 0.0,
             "avg_compression_ratio": _r(sum(c.compression_ratio for c in self.cases) / len(self.cases)) if self.cases else 1.0,
-            "dangling_citation_rate": _r(sum(c.dangling_rate for c in self.cases) / len(self.cases)) if self.cases else 0.0,
+            "dangling_citation_rate": (
+                _r(sum(c.dangling_rate for c in cited) / len(cited)) if cited else None
+            ),
+            "zero_citation_cases": zero_cite,
+            "citation_gate_pass_rate": (
+                _r(sum(1 for c in self.cases if c.has_citations and c.citation_ok) / len(self.cases))
+                if self.cases else 0.0
+            ),
+            "citation_coverage": (
+                _r(sum(c.citation_coverage for c in self.cases) / len(self.cases))
+                if self.cases else 1.0
+            ),
             "illegal_skill_reselect_total": sum(c.illegal_skill_reselect for c in self.cases),
             "avg_rounds": _r(sum(c.rounds for c in self.cases) / len(self.cases)) if self.cases else 0.0,
             "avg_llm_tokens": int(sum(c.llm_tokens for c in self.cases) / len(self.cases)) if self.cases else 0,
@@ -162,7 +179,12 @@ class EvalRunner:
         cr.evidence_kept = len(st.seen_row_hashes)
         ratios = [r.compression.get("compression_ratio", 1.0) for r in st.rounds if r.compression]
         cr.compression_ratio = round(sum(ratios) / len(ratios), 4) if ratios else 1.0
-        cr.dangling_rate = float((st.citation_check or {}).get("dangling_rate", 0.0))
+        cc = st.citation_check or {}
+        raw_rate = cc.get("dangling_rate")
+        cr.dangling_rate = None if raw_rate is None else float(raw_rate)
+        cr.has_citations = bool(cc.get("has_citations", False))
+        cr.citation_ok = bool(cc.get("ok", False))
+        cr.citation_coverage = citation_coverage(st.report_md or "")
         cr.illegal_skill_reselect = int(res.metrics.get("counters", {}).get("plan.illegal_skill", 0))
 
         if not gc.healthy:

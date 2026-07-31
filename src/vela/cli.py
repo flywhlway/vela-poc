@@ -102,7 +102,9 @@ def cmd_agent(a) -> int:
           f"技能路径: {' → '.join(st.used_skills) or '-'}\n"
           f"证据: {len(st.seen_row_hashes)} 条   引用校验: "
           f"{st.citation_check.get('valid', 0)}/{st.citation_check.get('total_citations', 0)} 有效"
-          f"（悬空率 {st.citation_check.get('dangling_rate', 0)}）\n"
+          f"（悬空率 {st.citation_check.get('dangling_rate')}；"
+          f"has_citations={st.citation_check.get('has_citations')}；"
+          f"ok={st.citation_check.get('ok')}）\n"
           f"模型用量: {res.gateway_stats.get('session_used')} tokens / "
           f"{res.gateway_stats.get('calls')} 次调用\n{'='*78}\n")
     print(st.report_md)
@@ -134,8 +136,10 @@ def cmd_eval(a) -> int:
     print("\n" + md)
     print(f"报告: {out/'eval_report.md'}\n明细: {out/'eval_result.json'}")
     m = res.metrics()
+    dcr = m["dangling_citation_rate"]
+    # D-25：硬退出仍仅原四条件；全零引用时 dangling_citation_rate 为 None，不计入悬空失败
     ok = (m["top1_root_cause_accuracy"] >= 0.8 and m["false_positive_rate"] <= 0.0
-          and m["dangling_citation_rate"] <= 0.015
+          and (dcr is None or dcr <= 0.015)
           and m["illegal_skill_reselect_total"] == 0)
     return 0 if ok else 4
 

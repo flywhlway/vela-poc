@@ -227,8 +227,10 @@ class AgentGraph:
             " ".join(f"[[EV:{h}]]" for v in verdicts for h in (v.get("citations") or [])),
             [r["row_hash"] for r in cr.kept if r.get("row_hash")], api=self.api)
         if cite_rep.dangling:
-            self.bus.emit("verify.dangling_citation", Severity.ALERT, st.round_no,
-                          dangling=cite_rep.dangling[:5], rate=cite_rep.dangling_rate)
+            payload = {"dangling": cite_rep.dangling[:5]}
+            if cite_rep.dangling_rate is not None:
+                payload["rate"] = cite_rep.dangling_rate
+            self.bus.emit("verify.dangling_citation", Severity.ALERT, st.round_no, **payload)
             self.metrics.inc("verify.dangling", len(cite_rep.dangling))
         supported = [v for v in verdicts if v.get("status") == "supported"]
         decisive = (bool(supported) and has_error_evidence and skill_id is not None
@@ -248,15 +250,18 @@ class AgentGraph:
         rep = verify_citations(text, [c["row_hash"] for c in chain], api=self.api)
         if rep.dangling:
             text = strip_dangling(text, rep.dangling)
-            self.bus.emit("report.dangling_citation", Severity.ALERT, st.round_no,
-                          dangling=rep.dangling, rate=rep.dangling_rate)
+            payload = {"dangling": rep.dangling}
+            if rep.dangling_rate is not None:
+                payload["rate"] = rep.dangling_rate
+            self.bus.emit("report.dangling_citation", Severity.ALERT, st.round_no, **payload)
         st.root_cause = rc
         st.report_md = text
         st.citation_check = rep.to_dict()
         self.metrics.gauge("report.dangling_rate", rep.dangling_rate)
-        self.bus.emit("report.done", Severity.MILESTONE, st.round_no,
-                      root_cause=rc.get("label"), citations=rep.total,
-                      dangling_rate=rep.dangling_rate)
+        done_kw: dict = {"root_cause": rc.get("label"), "citations": rep.total}
+        if rep.dangling_rate is not None:
+            done_kw["dangling_rate"] = rep.dangling_rate
+        self.bus.emit("report.done", Severity.MILESTONE, st.round_no, **done_kw)
         # 证据包（Merkle + 三级验证）
         items = [{"line_id": c["line_id"], "role": c["role"]} for c in chain if c.get("line_id")]
         if items:

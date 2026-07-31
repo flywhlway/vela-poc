@@ -15,7 +15,9 @@ class Metrics:
     def inc(self, name: str, value: float = 1.0) -> None:
         self.counters[name] += value
 
-    def gauge(self, name: str, value: float) -> None:
+    def gauge(self, name: str, value: float | None) -> None:
+        if value is None:
+            return
         self.gauges[name] = value
 
     def observe(self, name: str, ms: float) -> None:

@@ -8,6 +8,7 @@ _TARGETS = {
     "healthy_specificity": (1.00, ">="),
     "false_positive_rate": (0.00, "<="),
     "dangling_citation_rate": (0.015, "<="),
+    "citation_coverage": (0.9, ">="),
     "illegal_skill_reselect_total": (0, "<="),
     "evidence_pack_verify_pass": (1.00, ">="),
 }
@@ -23,11 +24,17 @@ def render_markdown(result: EvalResult) -> str:
          "| 指标 | 实测 | 目标 | 结论 |", "|---|---|---|---|"]
     for k, (target, op) in _TARGETS.items():
         v = m.get(k, 0)
-        ok = (v >= target) if op == ">=" else (v <= target)
-        L.append(f"| {k} | {v} | {op} {target} | {'✅ 达标' if ok else '❌ 未达标'} |")
+        if v is None:
+            ok = False
+            display = "None（无引用可测）"
+        else:
+            ok = (v >= target) if op == ">=" else (v <= target)
+            display = v
+        L.append(f"| {k} | {display} | {op} {target} | {'✅ 达标' if ok else '❌ 未达标'} |")
     L += ["", "## 其它指标", "", "| 指标 | 值 |", "|---|---|"]
     for k in ("fail_phase_accuracy", "culprit_component_hit", "skill_selection_hit",
               "avg_compression_ratio", "avg_rounds", "avg_llm_tokens",
+              "zero_citation_cases", "citation_gate_pass_rate",
               "diagnose_p50_s", "diagnose_p95_s"):
         L.append(f"| {k} | {m.get(k)} |")
     L += ["", "## 逐用例明细", "",

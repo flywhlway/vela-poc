@@ -86,6 +86,33 @@ def test_render_markdown_includes_notes_section_when_present():
     assert "备注" in md and "BUILD_FAILED" in md
 
 
+def test_metrics_none_safe_dangling_and_citation_coverage():
+    """零引用 dangling_rate=None 不参与均值；coverage / gate 键可聚合。"""
+    result = EvalResult(cases=[
+        CaseResult(case_id="Z", archive="a", expected_label="x", predicted_label="x",
+                   healthy=False, top1_hit=True, dangling_rate=None,
+                   has_citations=False, citation_ok=False, citation_coverage=0.0),
+        CaseResult(case_id="C", archive="b", expected_label="y", predicted_label="y",
+                   healthy=False, top1_hit=True, dangling_rate=0.0,
+                   has_citations=True, citation_ok=True, citation_coverage=1.0),
+    ], profile="poc", provider="mock")
+    m = result.metrics()
+    assert m["dangling_citation_rate"] == 0.0
+    assert m["zero_citation_cases"] == 1
+    assert m["citation_gate_pass_rate"] == 0.5
+    assert m["citation_coverage"] == 0.5
+    md = render_markdown(result)
+    assert "citation_coverage" in md
+
+
+def test_metrics_all_zero_citation_dangling_is_none():
+    result = EvalResult(cases=[
+        CaseResult(case_id="Z1", archive="a", expected_label=None, predicted_label=None,
+                   healthy=True, dangling_rate=None, has_citations=False),
+    ], profile="poc", provider="mock")
+    assert result.metrics()["dangling_citation_rate"] is None
+
+
 def test_truth_narrative_never_reaches_agent_context(built):
     """机制校验：sidecar 真值中的 narrative/root_cause_label 绝不应出现在诊断报告正文中，
     否则就是评测意义上的答案泄漏（agent 只能通过工具查询列式库，不能读取 truth.json）。"""
