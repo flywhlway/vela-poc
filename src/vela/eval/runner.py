@@ -125,12 +125,16 @@ def _no_fault(label) -> bool:
 class EvalRunner:
     def __init__(self, dataset_dir: str | Path, workspace: str | Path,
                  provider: str | None = None, profile: str | None = None,
-                 verify_packs: bool = True):
+                 verify_packs: bool = True, *,
+                 reuse_workspace: bool = False,
+                 cache_enabled: bool | None = None):
         self.dataset_dir = Path(dataset_dir)
         self.ws = Path(workspace)
         self.provider = provider
         self.profile = profile
         self.verify_packs = verify_packs
+        self.reuse_workspace = bool(reuse_workspace)
+        self.cache_enabled = cache_enabled
 
     def run(self, cases: list[GoldenCase] | None = None,
             progress=None) -> EvalResult:
@@ -145,25 +149,48 @@ class EvalRunner:
         out.elapsed_s = time.time() - t0
         return out
 
+    @staticmethod
+    def workspace_reusable(ws: Path) -> bool:
+        """METR-07：duckdb + manifest.json + qa checks_passed=True 三条件齐备才可复用。"""
+        duck = ws / "gold" / "analysis.duckdb"
+        manifest = ws / "manifest.json"
+        qa = ws / "qa" / "qa_report.json"
+        if not (duck.is_file() and manifest.is_file() and qa.is_file()):
+            return False
+        try:
+            report = read_json(qa)
+            return bool(report.get("checks_passed") is True)
+        except Exception:
+            return False
+
     def _one(self, gc: GoldenCase) -> CaseResult:
         ws = self.ws / gc.case_id
         cr = CaseResult(case_id=gc.case_id, archive=str(gc.archive),
                         expected_label=gc.expected_label, predicted_label=None,
                         healthy=gc.healthy)
         t0 = time.time()
+        reused = False
         try:
-            br = build_evidence_db(str(gc.archive), str(ws))
-            cr.records = br.total_records
+            if self.reuse_workspace and self.workspace_reusable(ws):
+                reused = True
+                cr.notes.append("REUSED_WORKSPACE")
+            else:
+                br = build_evidence_db(str(gc.archive), str(ws))
+                cr.records = br.total_records
         except Exception as e:
             cr.notes.append(f"BUILD_FAILED: {type(e).__name__}: {e}")
             cr.build_seconds = time.time() - t0
             return cr
         cr.build_seconds = time.time() - t0
+        if reused and cr.records == 0:
+            # 复用路径无 build 结果；records 可留 0
+            pass
 
         t1 = time.time()
         g = AgentGraph(ws / "gold" / "analysis.duckdb", workspace=ws,
                        provider=self.provider, profile=self.profile,
-                       session_id=f"EV-{gc.case_id}")
+                       session_id=f"EV-{gc.case_id}",
+                       enable_cache=self.cache_enabled)
         try:
             res = g.run()
         finally:

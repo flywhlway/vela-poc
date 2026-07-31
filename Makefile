@@ -7,7 +7,7 @@ VENV := .venv
 DATASET_DIR ?= ./data/dataset
 WORKSPACE ?= ./workspace
 
-.PHONY: help install install-dev doctor sim build query agent eval test test-fast \
+.PHONY: help install install-dev doctor sim build query agent eval eval-repeat test test-fast \
         demo bench serve clean clean-all lint
 
 help:
@@ -66,6 +66,12 @@ demo:
 eval: sim
 	PYTHONPATH=src VELA_CONFIG_DIR=config $(PYTHON) -m vela.cli eval run \
 		--dataset $(DATASET_DIR) --workspace $(WORKSPACE)/eval --out $(WORKSPACE)/eval/report
+
+# mock 重复评测冒烟（N=2，可复用 workspace；不触发付费）
+eval-repeat: sim
+	PYTHONPATH=src VELA_CONFIG_DIR=config $(PYTHON) -m vela.cli eval run \
+		--dataset $(DATASET_DIR) --workspace $(WORKSPACE)/eval \
+		--out $(WORKSPACE)/eval/report-repeat --repeat 2 --reuse-workspace --provider mock
 
 test:
 	PYTHONPATH=src VELA_CONFIG_DIR=config $(PYTHON) -m pytest tests/ -q

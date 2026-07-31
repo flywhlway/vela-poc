@@ -14,7 +14,9 @@ _TARGETS = {
 }
 
 
-def render_markdown(result: EvalResult) -> str:
+def render_markdown(result: EvalResult, *,
+                    runs: list[dict] | None = None,
+                    aggregate: dict | None = None) -> str:
     m = result.metrics()
     L = ["# VELA 黄金评测报告", "",
          f"- profile: `{m['profile']}`  provider: `{m['provider']}`",
@@ -37,6 +39,19 @@ def render_markdown(result: EvalResult) -> str:
               "zero_citation_cases", "citation_gate_pass_rate",
               "diagnose_p50_s", "diagnose_p95_s"):
         L.append(f"| {k} | {m.get(k)} |")
+    if aggregate:
+        L += ["", "## 重复评测聚合（均值 ± 标准差 / 95% CI）", "",
+              "| 指标 | mean | std | ci95 | n |", "|---|---|---|---|---|"]
+        for k, st in sorted(aggregate.items()):
+            ci = st.get("ci95")
+            ci_s = f"[{ci[0]:.4f}, {ci[1]:.4f}]" if ci else "—"
+            L.append(f"| {k} | {st.get('mean')} | {st.get('std')} | {ci_s} | {st.get('n')} |")
+    if runs:
+        L += ["", "## 逐次 run 明细", ""]
+        for i, rm in enumerate(runs, 1):
+            L.append(f"- run {i}: top1={rm.get('top1_root_cause_accuracy')} "
+                     f"fp={rm.get('false_positive_rate')} "
+                     f"dangling={rm.get('dangling_citation_rate')}")
     L += ["", "## 逐用例明细", "",
           "| 用例 | 期望根因 | 判定根因 | Top1 | 阶段 | 模块 | 技能 | 轮次 | 压缩比 | 悬空率 | 证据包 | 诊断秒 |",
           "|---|---|---|---|---|---|---|---|---|---|---|---|"]

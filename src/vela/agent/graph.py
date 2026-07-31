@@ -89,7 +89,8 @@ class AgentGraph:
     def __init__(self, db_path: str | Path, *, workspace: str | Path | None = None,
                  provider: str | None = None, profile: str | None = None,
                  session_id: str | None = None, skills: SkillRegistry | None = None,
-                 question: str | None = None):
+                 question: str | None = None,
+                 enable_cache: bool | None = None):
         self.db_path = str(db_path)
         self.ws = Path(workspace) if workspace else Path(db_path).parent.parent
         self.budget = load_budget(profile)
@@ -101,7 +102,8 @@ class AgentGraph:
         self.ledger = TokenLedger(budget=self.budget)
         self.gw = build_gateway(provider, session_id=self.session_id,
                                 audit_path=self.ws / "obs" / "llm_audit.jsonl",
-                                ledger=self.ledger)
+                                ledger=self.ledger,
+                                enable_cache=enable_cache)
         self.ckpt = CheckpointStore(self.ws / "sessions")
         self.state = SessionState(session_id=self.session_id, db_path=self.db_path,
                                   question=question or SessionState.question)

@@ -124,20 +124,62 @@ def cmd_agent(a) -> int:
 def cmd_eval(a) -> int:
     from vela.eval.report import render_markdown
     from vela.eval.runner import EvalRunner, save
-    r = EvalRunner(a.dataset, a.workspace, provider=a.provider, profile=a.profile)
+    from vela.util.jsonl import write_json
+
+    repeat = getattr(a, "repeat", None)
+    if repeat is not None and repeat < 2:
+        print("错误: --repeat N 要求 N≥2（单次评测请省略 --repeat）", flush=True)
+        return 2
+
+    no_cache = bool(getattr(a, "no_cache", False))
+    cache_enabled = False if no_cache else None
+    if no_cache:
+        import os
+        os.environ["VELA_LLM_CACHE"] = "0"
+
+    r = EvalRunner(a.dataset, a.workspace, provider=a.provider, profile=a.profile,
+                   reuse_workspace=bool(getattr(a, "reuse_workspace", False)),
+                   cache_enabled=cache_enabled)
+
     def prog(i, n, cid):
         print(f"[{i}/{n}] {cid} ...", flush=True)
-    res = r.run(progress=prog)
-    md = render_markdown(res)
+
+    runs_metrics: list[dict] = []
+    aggregate = None
+    if repeat:
+        last = None
+        for run_i in range(1, repeat + 1):
+            print(f"\n=== repeat {run_i}/{repeat} ===", flush=True)
+            last = r.run(progress=prog)
+            runs_metrics.append(last.metrics())
+        from vela.eval.stats import aggregate_metrics
+        aggregate = aggregate_metrics(runs_metrics)
+        res = last
+        # 退出码用聚合均值对照原四条件（D-25 / Plan 04）
+        m = {k: (aggregate[k]["mean"] if k in aggregate else runs_metrics[-1].get(k))
+             for k in runs_metrics[-1]}
+        # 保留非数值键
+        for k, v in runs_metrics[-1].items():
+            if k not in m:
+                m[k] = v
+            elif k not in aggregate:
+                m[k] = v
+    else:
+        res = r.run(progress=prog)
+        m = res.metrics()
+
+    md = render_markdown(res, runs=runs_metrics or None, aggregate=aggregate)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "eval_report.md").write_text(md, encoding="utf-8")
-    save(res, out / "eval_result.json")
+    payload = res.to_dict()
+    if runs_metrics:
+        payload["runs"] = runs_metrics
+        payload["aggregate"] = aggregate
+    write_json(out / "eval_result.json", payload)
     print("\n" + md)
     print(f"报告: {out/'eval_report.md'}\n明细: {out/'eval_result.json'}")
-    m = res.metrics()
-    dcr = m["dangling_citation_rate"]
-    # D-25：硬退出仍仅原四条件；全零引用时 dangling_citation_rate 为 None，不计入悬空失败
+    dcr = m.get("dangling_citation_rate")
     ok = (m["top1_root_cause_accuracy"] >= 0.8 and m["false_positive_rate"] <= 0.0
           and (dcr is None or dcr <= 0.015)
           and m["illegal_skill_reselect_total"] == 0)
@@ -393,6 +435,12 @@ def build_parser() -> argparse.ArgumentParser:
     er.add_argument("--out", default="./workspace/eval/report")
     er.add_argument("--provider", default=None)
     er.add_argument("--profile", default=None)
+    er.add_argument("--repeat", type=int, default=None,
+                    help="重复评测 N 次（N≥2）并输出均值±标准差与 95%% CI")
+    er.add_argument("--reuse-workspace", action="store_true",
+                    help="若 workspace 已有可用证据库则跳过重建")
+    er.add_argument("--no-cache", action="store_true",
+                    help="关闭 LLM 磁盘缓存（基线评测用）")
     er.set_defaults(func=cmd_eval)
 
     ev = sub.add_parser("evidence", help="证据包").add_subparsers(dest="sub", required=True)
