@@ -36,7 +36,9 @@ cp .env.example .env
 ```bash
 VELA_LLM_PROVIDER=volcengine
 VELA_ARK_API_KEY=<你的 API Key>
-VELA_ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3   # 默认值，通常不用改
+# 方舟两类合法入口（须择一；均以 /api/v3 或 /api/plan/v3 结尾）：
+VELA_ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+# VELA_ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/plan/v3
 VELA_ARK_MODEL=ep-xxxx                                        # 你的推理接入点 ID
 ```
 
@@ -71,8 +73,8 @@ vela doctor        # 确认本地配置与连通性（见下一节）
 
 **退出码语义（有意偏离「失败即非零」惯例）：**
 
-- 本地硬错误（配置缺失 / 必需依赖缺失 / `.env` 形态错误，例如 `base_url` 缺少
-  `/api/v3` 版本前缀）→ 返回 `1`
+- 本地硬错误（配置缺失 / 必需依赖缺失 / `.env` 形态错误，例如 `base_url` 不是
+  `/api/v3` 或 `/api/plan/v3` 结尾）→ 返回 `1`
 - 连通性四项任一失败 → 人读输出显著标 ❌，但返回 `0`，以免一次限流或临时断网中断
   `run_all.sh` 的整条链路
 
@@ -112,7 +114,7 @@ VELA_ARK_MODEL_FALLBACK=ep-yyyy-backup    # 主接入点全部重试耗尽后自
 `config/llm.yaml` 的 `providers.volcengine.timeout_s` 与 `max_retries` 分别映射到
 openai SDK 客户端的 `timeout` 与 `max_retries`；退避策略由 SDK 内置且不可配，
 `retry_backoff_s` 已随 SDK 化从 `config/llm.yaml` 删除。`chat_path` / `embed_path`
-同样删除，请求路径由 SDK 固定，因此 `base_url` **必须含版本前缀**（方舟为 `/api/v3`）。
+同样删除，请求路径由 SDK 固定，因此 `base_url` **必须含版本前缀**（方舟为 `/api/v3` 或 `/api/plan/v3`）。
 全部接入点都失败才会抛出 `LLMError`。
 
 ### 5. 运行
@@ -163,7 +165,7 @@ VELA_OPENAI_BASE_URL=http://localhost:8000/v1     # 例如自建 vLLM 服务
 VELA_OPENAI_MODEL=<模型名或部署名>
 ```
 
-`base_url` 同样必须含版本前缀（OpenAI 兼容端点通常为 `/v1`；方舟为 `/api/v3`）。
+`base_url` 同样必须含版本前缀（OpenAI 兼容端点通常为 `/v1`；方舟为 `/api/v3` 或 `/api/plan/v3`）。
 
 ---
 

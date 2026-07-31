@@ -38,10 +38,11 @@ _CFG = {
             "name": "VELA_ARK_BASE_URL",
             "display": "plain",
             "required_for_providers": ["volcengine"],
-            "pattern": r".*/api/v3$",
+            "pattern": r".*/api/(?:plan/)?v3$",
             "hint": (
-                "正确形式为 https://ark.cn-beijing.volces.com/api/v3；"
-                "/api/plan/v3 是常见笔误"
+                "须以 /api/v3 或 /api/plan/v3 结尾；"
+                "例：https://ark.cn-beijing.volces.com/api/v3 "
+                "或 https://ark.cn-beijing.volces.com/api/plan/v3"
             ),
         },
         {
@@ -68,14 +69,15 @@ def _by_name(results: list[dict], name: str) -> dict:
     return matched[0]
 
 
-def test_base_url_plan_v3_is_rejected():
+def test_base_url_api_v2_is_rejected():
+    """非 v3 / plan/v3 的路径仍为本地硬错误。"""
     rs = EnvChecker(cfg=_CFG).run(
         "volcengine",
-        {"VELA_ARK_BASE_URL": "https://ark.cn-beijing.volces.com/api/plan/v3"},
+        {"VELA_ARK_BASE_URL": "https://ark.cn-beijing.volces.com/api/v2"},
     )
     item = _by_name(rs, "VELA_ARK_BASE_URL")
     assert item["ok"] is False
-    assert "/api/v3" in item["detail"]
+    assert "/api/v3" in item["detail"] or "plan/v3" in item["detail"]
 
 
 def test_base_url_api_v3_is_ok():
@@ -89,6 +91,39 @@ def test_base_url_api_v3_is_ok():
         },
     )
     assert _by_name(rs, "VELA_ARK_BASE_URL")["ok"] is True
+
+
+def test_base_url_api_plan_v3_is_ok():
+    """方舟 /api/plan/v3 入口与 /api/v3 同等合法（实测可鉴权）。"""
+    rs = EnvChecker(cfg=_CFG).run(
+        "volcengine",
+        {
+            "VELA_ARK_BASE_URL": "https://ark.cn-beijing.volces.com/api/plan/v3",
+            "VELA_ARK_API_KEY": "DUMMY-KEY-0123456789ABCD",
+            "VELA_ARK_MODEL": "ep-DUMMY0001",
+            "VELA_LLM_PROVIDER": "volcengine",
+        },
+    )
+    assert _by_name(rs, "VELA_ARK_BASE_URL")["ok"] is True
+
+
+def test_real_yaml_accepts_both_ark_base_url_forms():
+    """真实 config/env_checks.yaml 须与注入样例规则一致。"""
+    checker = EnvChecker()  # 读真实 YAML
+    for url in (
+        "https://ark.cn-beijing.volces.com/api/v3",
+        "https://ark.cn-beijing.volces.com/api/plan/v3",
+    ):
+        rs = checker.run(
+            "volcengine",
+            {
+                "VELA_ARK_BASE_URL": url,
+                "VELA_ARK_API_KEY": "DUMMY-KEY-0123456789ABCD",
+                "VELA_ARK_MODEL": "ep-DUMMY0001",
+                "VELA_LLM_PROVIDER": "volcengine",
+            },
+        )
+        assert _by_name(rs, "VELA_ARK_BASE_URL")["ok"] is True, url
 
 
 def test_inline_comment_residue_fails():

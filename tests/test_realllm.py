@@ -66,12 +66,35 @@ def test_real_llm_diagnose_produces_cited_report(built, tmp_path, monkeypatch, c
 
 
 def test_real_llm_doctor_connectivity_all_green(monkeypatch, capsys):
-    """真实凭证下 doctor --json：local_ok、provider=volcengine、已探测。"""
+    """真实凭证下 doctor --json：形态与连通性分开断言。
+
+    - ``local_ok``：仅反映本地硬检查（配置/依赖/形态），与网络无关
+    - ``kind=connectivity`` 各项 ``ok``：才是「连通性全绿」
+    """
     monkeypatch.setenv("VELA_LLM_PROVIDER", "volcengine")
     rc = main(["doctor", "--json"])
     out = capsys.readouterr().out
     assert rc in (0, 1), f"doctor 异常终止 rc={rc}"
     data = json.loads(out)
-    assert data["local_ok"] is True
     assert data["provider"] == "volcengine"
     assert data["probed"] is True
+
+    # 形态失败 → rc=1 且 local_ok=False；连通性失败不得拖累 local_ok（D-14）
+    if not data["local_ok"]:
+        local_fails = [
+            c for c in data["checks"]
+            if c.get("kind") == "local" and not c.get("ok")
+        ]
+        pytest.fail(
+            "本地形态/配置检查未通过（与连通性无关）："
+            + "; ".join(f"{c.get('name')}: {c.get('detail')}" for c in local_fails)
+        )
+    assert rc == 0, "local_ok=True 时退出码须为 0（D-14）"
+
+    conn = [c for c in data["checks"] if c.get("kind") == "connectivity"]
+    assert conn, "缺少 kind=connectivity 检查项"
+    conn_fails = [c for c in conn if not c.get("ok")]
+    assert not conn_fails, (
+        "连通性未全绿："
+        + "; ".join(f"{c.get('name')}: {c.get('detail')}" for c in conn_fails)
+    )

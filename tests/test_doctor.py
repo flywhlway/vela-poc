@@ -8,7 +8,8 @@ from vela.cli import main
 _DUMMY_KEY = "DUMMY-ARKKEY-0123456789ABCD"
 _DUMMY_MODEL = "DUMMY-MODEL-001"
 _GOOD_BASE = "https://ark.cn-beijing.volces.com/api/v3"
-_BAD_BASE = "https://ark.cn-beijing.volces.com/api/plan/v3"
+_GOOD_BASE_PLAN = "https://ark.cn-beijing.volces.com/api/plan/v3"
+_BAD_BASE = "https://ark.cn-beijing.volces.com/api/v2"
 
 
 def _volcengine_env(monkeypatch, *, base_url: str = _GOOD_BASE,
@@ -69,7 +70,16 @@ def test_doctor_bad_base_url_path_is_local_error_and_exits_one(monkeypatch, caps
     rc = main(["doctor", "--offline"])
     out = capsys.readouterr().out
     assert rc == 1
-    assert "/api/v3" in out
+    assert "/api/v3" in out or "plan/v3" in out
+
+
+def test_doctor_plan_v3_base_url_is_local_ok(monkeypatch, capsys):
+    """/api/plan/v3 为合法方舟入口，不得再当成本地硬错误。"""
+    _volcengine_env(monkeypatch, base_url=_GOOD_BASE_PLAN)
+    rc = main(["doctor", "--offline", "--json"])
+    data = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert data["local_ok"] is True
 
 
 def test_doctor_connectivity_failure_does_not_change_exit_code(monkeypatch, capsys):

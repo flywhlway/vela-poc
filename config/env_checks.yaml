@@ -30,10 +30,12 @@ variables:
   - name: VELA_ARK_BASE_URL
     display: plain
     required_for_providers: [volcengine]
-    pattern: '.*/api/v3$'
+    # 方舟存在两类可用入口：/api/v3 与 /api/plan/v3（实测均可能鉴权成功）
+    pattern: '.*/api/(?:plan/)?v3$'
     hint: >-
-      正确形式为 https://ark.cn-beijing.volces.com/api/v3；
-      /api/plan/v3 是常见笔误，请将路径改为以 /api/v3 结尾
+      须以 /api/v3 或 /api/plan/v3 结尾；
+      例：https://ark.cn-beijing.volces.com/api/v3
+      或 https://ark.cn-beijing.volces.com/api/plan/v3
 
   - name: VELA_ARK_API_KEY
     display: masked
