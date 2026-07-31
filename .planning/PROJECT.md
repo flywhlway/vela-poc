@@ -34,12 +34,12 @@ VELA 把海量、多格式、多编码的车端 OTA 升级日志，转化为**�
 - ✓ 出站脱敏（VIN/GPS/手机号/IMEI/身份证/邮箱/IP 共 7 类）+ 三级 token 预算硬切断 + 全量调用审计 — v1.0
 - ✓ 10 场景仿真数据集 + 黄金评测集 + 6 项核心指标报表 — v1.0
 - ✓ CLI 统一入口（`sim`/`build`/`query`/`agent`/`eval`/`evidence`/`serve`/`doctor`）+ 本地 HTTP 服务 — v1.0
+- ✓ 真实火山引擎方舟 LLM 实测环境一键就绪并自检（`.env` 静默加载 + openai SDK provider + `vela doctor` 连通性/形态检查 + `realllm` 验收） — Validated in Phase 1: 真实 LLM 环境就绪
 
 ### Active
 
 <!-- v1.1 当前范围。详见 REQUIREMENTS.md -->
 
-- [ ] 真实火山引擎方舟 LLM 实测环境可一键就绪并自检
 - [ ] 度量体系可信：零引用报告被拦截、方差基线建立、`config_hash` 覆盖全部行为输入
 - [ ] 编排层逻辑缺陷止血：首轮 stop / JSON 解析 / 截断 / verifier 判据 / 技能锁死
 - [ ] 信号提取器配置化去耦合，打破「提取器认识仿真器格式」的循环验证
@@ -81,7 +81,7 @@ VELA 把海量、多格式、多编码的车端 OTA 升级日志，转化为**�
 
 这三项共同解释了一个此前的困惑：mock 能拿 100%，是因为**仿真器、信号提取器、mock 打分器三者共享同一套格式约定**，形成自我确认的闭环。
 
-**真实 LLM 环境的实际状态（2026-07-30 核查）**：`.env` 中密钥与 base_url 已填，但 `VELA_LLM_PROVIDER` 仍是 `mock`；且**项目无任何 `.env` 加载机制**（无 `python-dotenv` 依赖，`src/` 下零处读取），配置目前不会被代码读到。另有 `VELA_ARK_BASE_URL` 疑似笔误（`/api/plan/v3` vs 代码文档的 `/api/v3`）与行尾注释污染值的问题。
+**真实 LLM 环境（Phase 1 已交付，2026-07-31）**：`python-dotenv` 在 `config.py` 导入期静默加载项目根 `.env`（`override=False`）；provider 走 openai 官方 SDK；`vela doctor` 提供形态检查 + 四项连通性自检与退出码分层；方舟 `BASE_URL` 同时接受 `/api/v3` 与 `/api/plan/v3`；`realllm` 标记用例默认排除、显式 `-m realllm` 验收；演示链路（`run_all.sh` / `make demo`）钉死 mock 防误付费。
 
 ## Constraints
 
@@ -108,6 +108,9 @@ VELA 把海量、多格式、多编码的车端 OTA 升级日志，转化为**�
 | ADR-7 双驱动首先是可观测性设施，其次才是推理增强 | 单驱动下知识缺口不可观测；Q2 象限直接捕获已实测的 FM-1 静默误诊 | — Pending |
 | ADR-8 v1.1 无真实数据 → 消融评测集升为唯一泛化度量手段 | C-19 移出本期后，消融集是 C-22/C-23/M-03 验收的共同前置 | — Pending |
 | 删除所有 pp 数值收益承诺，改为过程指标验收 | 9 个故障用例下单例对错造成 ±11.1pp 跳变，一次噪声波动会引发无谓返工 | — Pending |
+| D-01 三方库优先（项目级永久） | 成熟开源库优先于手写；新增依赖须纯本地可装、不破坏主链路离线 | Phase 1 落地：python-dotenv / openai 入必需依赖 |
+| D-10 五层配置优先级 | 显式参数 > 进程环境 > `.env` > yaml > 代码默认 | Phase 1 落地于 STACK.md + config.py docstring |
+| 方舟 BASE_URL 双路径合法 | 实测 `/api/plan/v3` 可鉴权；旧规则误判为笔误 | Phase 1：env_checks 接受 `/api/v3` 与 `/api/plan/v3` |
 
 ## Current Milestone: v1.1 真实 LLM 生产级可信化与双驱动架构升级
 
@@ -145,4 +148,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-31 after v1.1 milestone start*
+*Last updated: 2026-07-31 after Phase 1*
