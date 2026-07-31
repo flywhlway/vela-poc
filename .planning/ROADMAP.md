@@ -78,7 +78,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 02-04-PLAN.md — --repeat t-CI + --reuse-workspace + --no-cache（METR-04/07）
+- [x] 02-04-PLAN.md — --repeat t-CI + --reuse-workspace + --no-cache（METR-04/07）
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -176,7 +176,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. 真实 LLM 环境就绪 | 8/8 | Complete    | 2026-07-31 |
-| 2. 度量可信与真实基线 | 3/6 | In Progress|  |
+| 2. 度量可信与真实基线 | 4/6 | In Progress|  |
 | 3. 编排层逻辑止血 | 0/TBD | Not started | - |
 | 4. 去循环耦合与反馈闭环 | 0/TBD | Not started | - |
 | 5. 置信度分级与技能治理 | 0/TBD | Not started | - |
