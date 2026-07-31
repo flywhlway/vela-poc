@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: 真实 LLM 生产级可信化与双驱动架构升级
-status: executing
-stopped_at: Completed 01-07-PLAN.md
-last_updated: "2026-07-30T23:42:34.451Z"
-last_activity: 2026-07-30
+status: verifying
+stopped_at: Completed 01-08-PLAN.md
+last_updated: "2026-07-31T15:13:15.750Z"
+last_activity: 2026-07-31
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 8
-  completed_plans: 7
-  percent: 0
+  completed_plans: 8
+  percent: 17
 ---
 
 # Project State
@@ -20,10 +20,10 @@ progress:
 
 Phase: 01 (llm) — EXECUTING
 Plan: 8 of 8
-Status: Ready to execute
-Last activity: 2026-07-30
+Status: Phase complete — ready for verification
+Last activity: 2026-07-31
 
-**Progress:** [█████████░] 88%
+**Progress:** [██████████] 100%
 
 ## Performance Metrics
 
@@ -36,6 +36,7 @@ Last activity: 2026-07-30
 | Phase 01-llm P05 | 3min | 3 tasks | 6 files |
 | Phase 01-llm P06 | 3min | 2 tasks | 2 files |
 | Phase 01-llm P07 | 3min | 2 tasks | 2 files |
+| Phase 01 P08 | continuation | 2 tasks | 8 files |
 
 ## Decisions
 
@@ -56,9 +57,11 @@ Last activity: 2026-07-30
 - [Phase 01]: doctor --json 顶层键：vela_version/python/config_dir/config_hash/provider/probed/dotenv/checks/checks_passed/local_ok——供 Phase 2 环境指纹（01-06）
 - [Phase 01]: rc∈{0,3} 均视为 diagnose 链路走完；不把 rc==0 作硬断言（D-19）（01-07）
 - [Phase 01]: 付费用例模块级 pytestmark=realllm + autouse 凭证守卫；报告取 sessions/*.state.json（01-07）
+- [Phase 01]: 方舟 BASE_URL 同时接受 /api/v3 与 /api/plan/v3；形态坏例改用 /api/v2（01-08）
+- [Phase 01]: realllm doctor 连通性断言收紧为四项全绿；ENV 四条需求在 Plan 08 实测后统一勾选（01-08）
 
 ## Session
 
-Last session: 2026-07-30T23:42:34.446Z
-Stopped at: Completed 01-07-PLAN.md
+Last session: 2026-07-31T15:13:15.745Z
+Stopped at: Completed 01-08-PLAN.md
 Resume file: None

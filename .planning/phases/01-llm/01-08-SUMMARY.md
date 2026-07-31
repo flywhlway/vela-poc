@@ -79,7 +79,7 @@ completed: 2026-07-31
 1. **Task 1: 一票否决回归门（六项）** - `7fc9740` (fix) + 结果文件 `01-08-GATE-RESULTS.md`
 2. **Task 2: ENV-02/ENV-03 真实火山引擎实测验收** - 人工 `approved`；配套修复 `21fddb9` (fix)
 
-**Plan metadata:** （本 SUMMARY 提交后回填）
+**Plan metadata:** `9d2054e` (docs: complete plan；STATE/ROADMAP 收尾另提交)
 
 ## Task 1 — 六项回归门（mock）
 
@@ -172,9 +172,15 @@ completed: 2026-07-31
 - 可进入 Phase 2（度量可信与真实基线）；后续真实评测沿用 `.env` 自动加载 + `pytest -m realllm` / doctor 入口
 - 无阻塞项
 
-## Self-Check: PENDING
+## Self-Check: PASSED
 
-（提交后由执行器回填）
+- FOUND: `.planning/phases/01-llm/01-08-SUMMARY.md`
+- FOUND: `.planning/phases/01-llm/01-08-GATE-RESULTS.md`
+- FOUND: commit `7fc9740` (Task 1)
+- FOUND: commit `21fddb9` (Task 2 配套修复)
+- FOUND: commit `9d2054e` (SUMMARY)
+- FOUND: ROADMAP Phase 1 plans 8/8 Complete；ENV-01..04 均已勾选
+- FOUND: `.env` 未追踪（`git ls-files | grep -c '^\.env$'` = 0）
 
 ---
 *Phase: 01-llm*

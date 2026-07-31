@@ -10,7 +10,7 @@
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 1: 真实 LLM 环境就绪** - 打通火山引擎方舟真实环境，`.env` 自动加载 + provider 切换 + `vela doctor` 连通性自检
+- [x] **Phase 1: 真实 LLM 环境就绪** - 打通火山引擎方舟真实环境，`.env` 自动加载 + provider 切换 + `vela doctor` 连通性自检 (completed 2026-07-31)
 - [ ] **Phase 2: 度量可信与真实基线** - 修正评测闸门与指标基础设施，在真实 LLM 上建立带置信区间的准确率、成本、延迟新基线
 - [ ] **Phase 3: 编排层逻辑止血** - 消除首轮误停 / JSON 解析 / 截断 / verifier 判据 / 技能锁死等逻辑必然缺陷
 - [ ] **Phase 4: 去循环耦合与反馈闭环** - 提取器框架化解耦仿真器依赖，补全 planner 反馈闭环并加固注入安全
@@ -40,7 +40,7 @@
 - [x] 01-05-PLAN.md — mask_secret 掩码 + config/env_checks.yaml 规则表 + EnvChecker 模块 + .env.example 注释清理
 - [x] 01-06-PLAN.md — `vela doctor` 四项连通性自检 + 双通道渲染 + 退出码分层 + --offline/--online/--json
 - [x] 01-07-PLAN.md — realllm 标记端到端验收用例 + 生产接入文档三处口径对齐
-- [ ] 01-08-PLAN.md — 一票否决回归门（177 测试 + 仿真基准回归数 0 + 演示链路）+ 真实环境实测验收
+- [x] 01-08-PLAN.md — 一票否决回归门（177 测试 + 仿真基准回归数 0 + 演示链路）+ 真实环境实测验收
 
 ### Phase 2: 度量可信与真实基线
 **Goal**: 评测体系本身先被修正为可信——零引用报告不再被误判通过、配置改动必被指纹捕获、重复评测可给出置信区间、7 项过程指标与消融评测集接入报表——并在真实火山引擎环境下产出第一份带置信区间的准确率、成本、延迟基线，取代无统计意义的 44.4%。本阶段**不改任何推理逻辑**（ADR-2：先修度量再修系统）。
@@ -131,7 +131,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. 真实 LLM 环境就绪 | 7/8 | In Progress|  |
+| 1. 真实 LLM 环境就绪 | 8/8 | Complete   | 2026-07-31 |
 | 2. 度量可信与真实基线 | 0/TBD | Not started | - |
 | 3. 编排层逻辑止血 | 0/TBD | Not started | - |
 | 4. 去循环耦合与反馈闭环 | 0/TBD | Not started | - |
