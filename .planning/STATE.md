@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: 真实 LLM 生产级可信化与双驱动架构升级
-status: planning
-stopped_at: Phase 2 context gathered
-last_updated: "2026-07-31T15:20:09.629Z"
+status: ready_to_execute
+stopped_at: Phase 2 plans created
+last_updated: "2026-07-31T15:28:18.368Z"
 last_activity: 2026-07-31
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 8
+  total_plans: 14
   completed_plans: 8
   percent: 17
 ---
@@ -18,12 +18,12 @@ progress:
 
 ## Current Position
 
-Phase: 2
-Plan: Not started
-Status: Ready to plan
+Phase: 2 — 度量可信与真实基线
+Plan: 0/6（计划已就绪，待执行）
+Status: Plans ready — run `/gsd-execute-phase 2`
 Last activity: 2026-07-31
 
-**Progress:** [██████████] 100%
+**Progress:** [██░░░░░░░░] 17%（Phase 1 完成；Phase 2 规划完成）
 
 ## Performance Metrics
 
@@ -59,9 +59,10 @@ Last activity: 2026-07-31
 - [Phase 01]: 付费用例模块级 pytestmark=realllm + autouse 凭证守卫；报告取 sessions/*.state.json（01-07）
 - [Phase 01]: 方舟 BASE_URL 同时接受 /api/v3 与 /api/plan/v3；形态坏例改用 /api/v2（01-08）
 - [Phase 01]: realllm doctor 连通性断言收紧为四项全绿；ENV 四条需求在 Plan 08 实测后统一勾选（01-08）
+- [Phase 02]: 规划为 6 plans / 4 waves；Wave1 并行闸门+指纹+缓存成本；METR-09/PERF-01 收尾 Plan 06；ADR-2 禁止改 graph 推理
 
 ## Session
 
 Last session: 2026-07-31T15:20:09.626Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-metrics-baseline/02-CONTEXT.md
+Stopped at: Phase 2 plans created
+Resume file: .planning/phases/02-metrics-baseline/02-01-PLAN.md

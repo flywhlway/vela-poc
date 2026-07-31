@@ -58,7 +58,15 @@
 **回归门**:
   - 现有 177 个测试全部通过
   - 仿真基准已通过用例回归数 = 0（一票否决）
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — 引用闸门语义修正 + citation_coverage（METR-01/02）
+- [ ] 02-02-PLAN.md — config_hash 扩展与断代映射表（METR-03）
+- [ ] 02-03-PLAN.md — LLM 磁盘缓存 + TokenLedger 成本归集（METR-06/PERF-02）
+- [ ] 02-04-PLAN.md — --repeat t-CI + --reuse-workspace + --no-cache（METR-04/07）
+- [ ] 02-05-PLAN.md — 过程指标聚合 + 消融评测集（METR-05/08）
+- [ ] 02-06-PLAN.md — 真实无缓存方差基线 + bench 收尾（METR-09/PERF-01）
 
 ### Phase 3: 编排层逻辑止血
 **Goal**: 消除编排层的逻辑必然缺陷——首轮误停、JSON 解析静默失败、输出截断、verifier 判据脆弱匹配与循环论证、技能被误剔除、未解释错误被忽视、候选集全零分空手停止。这些缺陷 mock 供应商因「按设计意图而非提示词字面实现」而完全测不出，是本里程碑首个触及真实 LLM 行为的阶段。
@@ -132,7 +140,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. 真实 LLM 环境就绪 | 8/8 | Complete    | 2026-07-31 |
-| 2. 度量可信与真实基线 | 0/TBD | Not started | - |
+| 2. 度量可信与真实基线 | 0/6 | Planned | - |
 | 3. 编排层逻辑止血 | 0/TBD | Not started | - |
 | 4. 去循环耦合与反馈闭环 | 0/TBD | Not started | - |
 | 5. 置信度分级与技能治理 | 0/TBD | Not started | - |
