@@ -139,7 +139,8 @@ def cmd_eval(a) -> int:
 
     r = EvalRunner(a.dataset, a.workspace, provider=a.provider, profile=a.profile,
                    reuse_workspace=bool(getattr(a, "reuse_workspace", False)),
-                   cache_enabled=cache_enabled)
+                   cache_enabled=cache_enabled,
+                   ablation=bool(getattr(a, "ablation", False)))
 
     def prog(i, n, cid):
         print(f"[{i}/{n}] {cid} ...", flush=True)
@@ -441,6 +442,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="若 workspace 已有可用证据库则跳过重建")
     er.add_argument("--no-cache", action="store_true",
                     help="关闭 LLM 磁盘缓存（基线评测用）")
+    er.add_argument("--ablation", action="store_true",
+                    help="消融评测：运行时 mask 剔除 golden expected_skills")
     er.set_defaults(func=cmd_eval)
 
     ev = sub.add_parser("evidence", help="证据包").add_subparsers(dest="sub", required=True)

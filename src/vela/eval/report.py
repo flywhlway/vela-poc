@@ -11,6 +11,11 @@ _TARGETS = {
     "citation_coverage": (0.9, ">="),
     "illegal_skill_reselect_total": (0, "<="),
     "evidence_pack_verify_pass": (1.00, ">="),
+    # 消融/泛化（展示目标；本阶段不要求达标，不进 cmd_eval 硬退出）
+    "misdiagnosis_rate_under_ablation": (0.50, "<="),
+    "novel_detection_recall": (0.50, ">="),
+    "unexplained_error_rate": (0.50, "<="),
+    "confidence_calibration_error": (0.50, "<="),
 }
 
 
@@ -25,6 +30,9 @@ def render_markdown(result: EvalResult, *,
          "## 核心指标与达标情况", "",
          "| 指标 | 实测 | 目标 | 结论 |", "|---|---|---|---|"]
     for k, (target, op) in _TARGETS.items():
+        if k not in m and k in ("misdiagnosis_rate_under_ablation", "novel_detection_recall",
+                                "confidence_calibration_error"):
+            continue
         v = m.get(k, 0)
         if v is None:
             ok = False
@@ -37,8 +45,21 @@ def render_markdown(result: EvalResult, *,
     for k in ("fail_phase_accuracy", "culprit_component_hit", "skill_selection_hit",
               "avg_compression_ratio", "avg_rounds", "avg_llm_tokens",
               "zero_citation_cases", "citation_gate_pass_rate",
+              "premature_stop_rate", "llm_parse_failure_rate", "llm_truncation_rate",
+              "verdict_supported_ratio", "skill_switch_per_session",
               "diagnose_p50_s", "diagnose_p95_s"):
         L.append(f"| {k} | {m.get(k)} |")
+    if m.get("process_footnote") or m.get("ablation_footnote"):
+        L += ["", f"> {m.get('ablation_footnote') or m.get('process_footnote')}", ""]
+    trace = m.get("decision_trace") or []
+    if trace:
+        L += ["", "## 每轮决策轨迹", "",
+              "| case_id | round_no | selected_skill | stop | actions |",
+              "|---|---|---|---|---|"]
+        for row in trace[:200]:
+            L.append(f"| {row.get('case_id')} | {row.get('round_no')} | "
+                     f"{row.get('selected_skill') or '—'} | {row.get('stop')} | "
+                     f"{row.get('actions')} |")
     if aggregate:
         L += ["", "## 重复评测聚合（均值 ± 标准差 / 95% CI）", "",
               "| 指标 | mean | std | ci95 | n |", "|---|---|---|---|---|"]

@@ -7,7 +7,15 @@ from pathlib import Path
 
 from vela.agent.citations import citation_coverage
 from vela.agent.graph import AgentGraph
+from vela.agent.skills import SkillRegistry
+from vela.config import load_skills
 from vela.eval.golden import GoldenCase, load_golden
+from vela.eval.process import (
+    aggregate_ablation_metrics,
+    aggregate_process_metrics,
+    decision_trace,
+    mask_skills,
+)
 from vela.evidence.pipeline import build as build_evidence_db
 from vela.evidencepack.verifier import verify_all
 from vela.util.jsonl import read_json, write_json
@@ -77,7 +85,7 @@ class EvalResult:
         packs = [c for c in self.cases if c.evidence_pack_ok is not None]
         cited = [c for c in self.cases if c.dangling_rate is not None]
         zero_cite = sum(1 for c in self.cases if not c.has_citations)
-        return {
+        out = {
             "cases_total": len(self.cases),
             "cases_faulty": len(f), "cases_healthy": len(h),
             "top1_root_cause_accuracy": _r(sum(c.top1_hit for c in f) / len(f)) if f else 0.0,
@@ -107,6 +115,40 @@ class EvalResult:
             "total_elapsed_s": round(self.elapsed_s, 2),
             "profile": self.profile, "provider": self.provider,
         }
+        # 过程指标（可测即可）
+        bundles = [self._case_process_dict(c) for c in self.cases]
+        proc = aggregate_process_metrics(bundles)
+        for k in ("premature_stop_rate", "llm_parse_failure_rate", "llm_truncation_rate",
+                  "verdict_supported_ratio", "skill_switch_per_session",
+                  "unexplained_error_rate"):
+            if k in proc:
+                out[k] = proc[k]
+        out["decision_trace"] = decision_trace(bundles)
+        out["process_footnote"] = proc.get("_footnote")
+        if any(c.ablation for c in self.cases):
+            abl = aggregate_ablation_metrics(bundles)
+            for k in ("misdiagnosis_rate_under_ablation", "novel_detection_recall",
+                      "confidence_calibration_error"):
+                out[k] = abl.get(k)
+            if abl.get("unexplained_error_rate") is not None:
+                out["unexplained_error_rate"] = abl["unexplained_error_rate"]
+            out["ablation_footnote"] = abl.get("_footnote")
+        return out
+
+    @staticmethod
+    def _case_process_dict(c: "CaseResult") -> dict:
+        b = dict(c.process_bundle or {})
+        b.update({
+            "case_id": c.case_id,
+            "healthy": c.healthy,
+            "status": c.status,
+            "predicted_label": c.predicted_label,
+            "expected_label": c.expected_label,
+            "top1_hit": c.top1_hit,
+            "citation_coverage": c.citation_coverage,
+            "ablation": c.ablation,
+        })
+        return b
 
     def to_dict(self) -> dict:
         return {"metrics": self.metrics(),
@@ -130,7 +172,8 @@ class EvalRunner:
                  provider: str | None = None, profile: str | None = None,
                  verify_packs: bool = True, *,
                  reuse_workspace: bool = False,
-                 cache_enabled: bool | None = None):
+                 cache_enabled: bool | None = None,
+                 ablation: bool = False):
         self.dataset_dir = Path(dataset_dir)
         self.ws = Path(workspace)
         self.provider = provider
@@ -138,6 +181,7 @@ class EvalRunner:
         self.verify_packs = verify_packs
         self.reuse_workspace = bool(reuse_workspace)
         self.cache_enabled = cache_enabled
+        self.ablation = bool(ablation)
 
     def run(self, cases: list[GoldenCase] | None = None,
             progress=None) -> EvalResult:
@@ -190,15 +234,31 @@ class EvalRunner:
             pass
 
         t1 = time.time()
+        skills_reg = None
+        do_ablate = self.ablation and (not gc.healthy) and bool(gc.expected_skills)
+        if do_ablate:
+            skills_reg = SkillRegistry(mask_skills(load_skills(), gc.expected_skills))
         g = AgentGraph(ws / "gold" / "analysis.duckdb", workspace=ws,
                        provider=self.provider, profile=self.profile,
                        session_id=f"EV-{gc.case_id}",
-                       enable_cache=self.cache_enabled)
+                       enable_cache=self.cache_enabled,
+                       skills=skills_reg)
         try:
             res = g.run()
+            # 过程：ERROR 未进证据池占比（须在 close 前经 LogQueryAPI）
+            unexplained = None
+            try:
+                err_rows = g.api.call("search_logs", query="", min_level="ERROR", limit=200).rows
+                err_hashes = {r.get("row_hash") for r in err_rows if r.get("row_hash")}
+                if err_hashes:
+                    unseen = err_hashes - set(res.state.seen_row_hashes)
+                    unexplained = round(len(unseen) / len(err_hashes), 4)
+            except Exception:
+                unexplained = None
         finally:
             g.close()
         cr.diagnose_seconds = time.time() - t1
+        cr.ablation = bool(do_ablate)
 
         st = res.state
         cr.status = st.status
@@ -216,6 +276,23 @@ class EvalRunner:
         cr.citation_ok = bool(cc.get("ok", False))
         cr.citation_coverage = citation_coverage(st.report_md or "")
         cr.illegal_skill_reselect = int(res.metrics.get("counters", {}).get("plan.illegal_skill", 0))
+
+        # 过程聚合夹具
+        audit_path = ws / "obs" / "llm_audit.jsonl"
+        audit_recs: list[dict] = []
+        if audit_path.is_file():
+            try:
+                from vela.util.jsonl import read_jsonl
+                audit_recs = list(read_jsonl(audit_path))
+            except Exception:
+                audit_recs = []
+        cr.process_bundle = {
+            "events": res.events,
+            "rounds": [r.__dict__ if hasattr(r, "__dict__") else r for r in st.rounds],
+            "audit": audit_recs,
+            "report_md": st.report_md,
+            "unexplained_error_rate": unexplained,
+        }
 
         if not gc.healthy:
             cr.top1_hit = bool(cr.predicted_label and cr.predicted_label == gc.expected_label)

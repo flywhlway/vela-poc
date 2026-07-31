@@ -204,3 +204,71 @@ def test_no_cache_sets_env_and_runner_flag(monkeypatch, tmp_path):
     from vela.eval.runner import EvalRunner
     r = EvalRunner(tmp_path, tmp_path / "ws", cache_enabled=False)
     assert r.cache_enabled is False
+
+
+def test_process_metrics_keys_and_trace():
+    from vela.eval.process import aggregate_process_metrics, decision_trace, PROXY_FOOTNOTE
+    cases = [{
+        "case_id": "C1",
+        "healthy": False,
+        "events": [
+            {"kind": "plan.done", "round_no": 1, "payload": {"skill": "SK-A", "stop": True, "actions": []}},
+            {"kind": "verify.done", "round_no": 1, "payload": {"supported": 1, "claims": 2}},
+        ],
+        "rounds": [{"round_no": 1, "selected_skill": "SK-A", "actions": [], "productive": False}],
+        "audit": [{"finish_reason": "stop"}, {"finish_reason": "length"}],
+        "report_md": "事实 [[EV:aaaa1111bbbb2222]]。",
+        "citation_coverage": 1.0,
+        "unexplained_error_rate": 0.25,
+    }]
+    m = aggregate_process_metrics(cases)
+    for k in ("premature_stop_rate", "llm_parse_failure_rate", "llm_truncation_rate",
+              "verdict_supported_ratio", "skill_switch_per_session",
+              "unexplained_error_rate", "citation_coverage"):
+        assert k in m
+    assert m["premature_stop_rate"] == 1.0
+    assert m["llm_truncation_rate"] == 0.5
+    assert "代理口径" in PROXY_FOOTNOTE or "Phase 5" in PROXY_FOOTNOTE
+    tr = decision_trace(cases)
+    assert tr and tr[0]["case_id"] == "C1" and tr[0]["round_no"] == 1
+
+
+def test_ablation_mask_skills_does_not_touch_yaml():
+    from pathlib import Path
+    from vela.config import load_skills
+    from vela.eval.process import mask_skills, aggregate_ablation_metrics
+    src = Path("config/skills/builtin.yaml").read_text(encoding="utf-8")
+    all_sk = load_skills()
+    ids = {s["id"] for s in all_sk}
+    assert "SK-UDS-NRC" in ids
+    masked = mask_skills(all_sk, ["SK-UDS-NRC"])
+    assert "SK-UDS-NRC" not in {s["id"] for s in masked}
+    assert Path("config/skills/builtin.yaml").read_text(encoding="utf-8") == src
+    abl = aggregate_ablation_metrics([
+        {"healthy": False, "status": "answered", "predicted_label": "wrong",
+         "expected_label": "right", "top1_hit": False},
+        {"healthy": False, "status": "unanswerable", "predicted_label": None,
+         "expected_label": "right", "top1_hit": False},
+    ])
+    assert "misdiagnosis_rate_under_ablation" in abl
+    assert "novel_detection_recall" in abl
+    assert "confidence_calibration_error" in abl
+
+
+def test_render_includes_process_footnote_when_present():
+    result = EvalResult(cases=[
+        CaseResult(case_id="F1", archive="a", expected_label="x", predicted_label="x",
+                   healthy=False, top1_hit=True, evidence_pack_ok=True,
+                   process_bundle={
+                       "events": [{"kind": "plan.done", "round_no": 1,
+                                   "payload": {"skill": "S", "stop": False, "actions": ["t"]}}],
+                       "rounds": [{"round_no": 1, "selected_skill": "S", "actions": [{}],
+                                   "productive": True}],
+                       "audit": [],
+                       "report_md": "ok",
+                   }),
+    ], profile="poc", provider="mock")
+    md = render_markdown(result)
+    assert "premature_stop_rate" in md
+    assert "决策轨迹" in md
+    assert "代理口径" in md or "Phase 5" in md
