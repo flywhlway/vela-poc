@@ -4,6 +4,7 @@
 用法：
     python scripts/bench.py                      # 用全部 10 个内置场景
     python scripts/bench.py --repeat 3            # 每个场景诊断 3 次取分布
+    python scripts/bench.py --provider volcengine --no-cache
 """
 from __future__ import annotations
 
@@ -36,7 +37,13 @@ def main() -> int:
     ap.add_argument("--workspace", default=str(ROOT / "workspace" / "bench"))
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--provider", default=None)
+    ap.add_argument("--no-cache", action="store_true",
+                    help="关闭 LLM 磁盘缓存（真实基线）")
+    ap.add_argument("--out", default=None, help="结果 JSON 路径（默认 workspace/bench_result.json）")
     args = ap.parse_args()
+
+    if args.no_cache:
+        os.environ["VELA_LLM_CACHE"] = "0"
 
     from vela.eval.golden import load_golden
     from vela.evidence.pipeline import build
@@ -46,10 +53,13 @@ def main() -> int:
         print(f"数据集 {ds} 为空，先运行: vela sim generate --out {ds}")
         return 1
     cases = load_golden(ds)
-    print(f"共 {len(cases)} 个场景，每场景诊断 {args.repeat} 次\n")
+    print(f"共 {len(cases)} 个场景，每场景诊断 {args.repeat} 次"
+          f"（provider={args.provider or 'default'} no_cache={args.no_cache}）\n")
 
     build_throughput: list[float] = []
     diag_latency: list[float] = []
+    costs: list[float] = []
+    tokens: list[int] = []
     rows_total = 0
 
     for gc in cases:
@@ -67,15 +77,22 @@ def main() -> int:
         for i in range(args.repeat):
             t1 = time.time()
             g = AgentGraph(ws / "gold" / "analysis.duckdb", workspace=ws,
-                           provider=args.provider, session_id=f"BENCH-{gc.case_id}-{i}")
+                           provider=args.provider, session_id=f"BENCH-{gc.case_id}-{i}",
+                           enable_cache=False if args.no_cache else None)
             try:
                 res = g.run()
+                snap = res.gateway_stats or {}
             finally:
                 g.close()
             dt2 = time.time() - t1
             diag_latency.append(dt2)
+            cost = float(snap.get("estimated_cost_usd") or 0.0)
+            tok = int(snap.get("session_used") or 0)
+            costs.append(cost)
+            tokens.append(tok)
             print(f"       [诊断 {i+1}/{args.repeat}] {dt2*1000:6.1f}ms  "
-                 f"status={res.state.status}  rounds={res.state.round_no}")
+                  f"status={res.state.status}  rounds={res.state.round_no}  "
+                  f"tokens={tok}  cost_usd={cost}")
 
     print(f"\n{'='*60}")
     print(f"总行数: {rows_total:,}")
@@ -84,12 +101,24 @@ def main() -> int:
     print(f"诊断延迟  P50={pct(diag_latency,0.5)*1000:>8.1f} ms   "
           f"P95={pct(diag_latency,0.95)*1000:>8.1f} ms   "
           f"均值={statistics.mean(diag_latency)*1000:.1f} ms")
+    print(f"token/成本 session_used 均值={statistics.mean(tokens) if tokens else 0:.0f}  "
+          f"estimated_cost_usd 合计={sum(costs):.6f}")
 
-    out = {"rows_total": rows_total,
-          "build_throughput_rows_per_s": {"p50": pct(build_throughput, 0.5),
+    out = {
+        "rows_total": rows_total,
+        "provider": args.provider or os.environ.get("VELA_LLM_PROVIDER", "default"),
+        "no_cache": bool(args.no_cache),
+        "build_throughput_rows_per_s": {"p50": pct(build_throughput, 0.5),
                                           "p95": pct(build_throughput, 0.95)},
-          "diagnose_latency_s": {"p50": pct(diag_latency, 0.5), "p95": pct(diag_latency, 0.95)}}
-    out_path = Path(args.workspace) / "bench_result.json"
+        "diagnose_latency_s": {"p50": pct(diag_latency, 0.5),
+                               "p95": pct(diag_latency, 0.95),
+                               "mean": round(statistics.mean(diag_latency), 4) if diag_latency else 0.0},
+        "diagnose_p95_s": pct(diag_latency, 0.95),
+        "session_used_mean": round(statistics.mean(tokens), 2) if tokens else 0,
+        "estimated_cost_usd_total": round(sum(costs), 6),
+        "estimated_cost_usd_mean": round(statistics.mean(costs), 6) if costs else 0.0,
+    }
+    out_path = Path(args.out) if args.out else Path(args.workspace) / "bench_result.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\n结果已写入: {out_path}")

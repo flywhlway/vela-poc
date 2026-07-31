@@ -7,7 +7,7 @@ VENV := .venv
 DATASET_DIR ?= ./data/dataset
 WORKSPACE ?= ./workspace
 
-.PHONY: help install install-dev doctor sim build query agent eval eval-repeat test test-fast \
+.PHONY: help install install-dev doctor sim build query agent eval eval-repeat baseline bench-volc test test-fast \
         demo bench serve clean clean-all lint
 
 help:
@@ -72,6 +72,20 @@ eval-repeat: sim
 	PYTHONPATH=src VELA_CONFIG_DIR=config $(PYTHON) -m vela.cli eval run \
 		--dataset $(DATASET_DIR) --workspace $(WORKSPACE)/eval \
 		--out $(WORKSPACE)/eval/report-repeat --repeat 2 --reuse-workspace --provider mock
+
+# 付费真实基线（METR-09）：显式目标，不并入 test/eval
+baseline: sim
+	PYTHONPATH=src VELA_CONFIG_DIR=config VELA_LLM_PROVIDER=volcengine $(PYTHON) -m vela.cli doctor --json > .planning/phases/02-metrics-baseline/baseline/doctor.json || true
+	PYTHONPATH=src VELA_CONFIG_DIR=config VELA_LLM_PROVIDER=volcengine $(PYTHON) -m vela.cli eval run \
+		--dataset $(DATASET_DIR) --workspace $(WORKSPACE)/baseline-eval \
+		--out .planning/phases/02-metrics-baseline/baseline \
+		--provider volcengine --no-cache --repeat 3 --reuse-workspace
+
+bench-volc:
+	PYTHONPATH=src VELA_CONFIG_DIR=config VELA_LLM_PROVIDER=volcengine $(PYTHON) scripts/bench.py \
+		--dataset $(DATASET_DIR) --workspace $(WORKSPACE)/bench-volc \
+		--provider volcengine --no-cache --repeat 1 \
+		--out .planning/phases/02-metrics-baseline/baseline/bench_result.json
 
 test:
 	PYTHONPATH=src VELA_CONFIG_DIR=config $(PYTHON) -m pytest tests/ -q
