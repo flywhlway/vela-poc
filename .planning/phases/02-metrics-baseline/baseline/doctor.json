@@ -1,0 +1,209 @@
+{
+  "vela_version": "1.0.0",
+  "python": "3.12.13",
+  "config_dir": "/Users/flywhl/dev/work/vela-poc/config",
+  "config_hash": "sha256:c1377375a18671772f4101bbdf4584dfb84ec9fc14ddd5a7981ecc375eba3c3e",
+  "provider": "volcengine",
+  "probed": true,
+  "dotenv": {
+    "path": "/Users/flywhl/dev/work/vela-poc/.env",
+    "loaded": true,
+    "keys": "***",
+    "shadowed": [
+      "VELA_LLM_PROVIDER"
+    ]
+  },
+  "checks": [
+    {
+      "name": "pipeline.yaml",
+      "ok": true,
+      "detail": "/Users/flywhl/dev/work/vela-poc/config/pipeline.yaml",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "parsers.yaml",
+      "ok": true,
+      "detail": "/Users/flywhl/dev/work/vela-poc/config/parsers.yaml",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "ota_phases.yaml",
+      "ok": true,
+      "detail": "/Users/flywhl/dev/work/vela-poc/config/ota_phases.yaml",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "budget.yaml",
+      "ok": true,
+      "detail": "/Users/flywhl/dev/work/vela-poc/config/budget.yaml",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "llm.yaml",
+      "ok": true,
+      "detail": "/Users/flywhl/dev/work/vela-poc/config/llm.yaml",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "module:duckdb",
+      "ok": true,
+      "detail": "已安装",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "module:pyarrow",
+      "ok": true,
+      "detail": "已安装",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "module:yaml",
+      "ok": true,
+      "detail": "已安装",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "module:dotenv",
+      "ok": true,
+      "detail": "已安装",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "module:openai",
+      "ok": true,
+      "detail": "已安装",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "module:xxhash",
+      "ok": true,
+      "detail": "已安装",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "module:blake3",
+      "ok": true,
+      "detail": "已安装",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "module:fastapi",
+      "ok": true,
+      "detail": "已安装",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "module:pytest",
+      "ok": true,
+      "detail": "已安装",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "VELA_LLM_PROVIDER",
+      "ok": true,
+      "detail": "volcengine",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "VELA_ARK_BASE_URL",
+      "ok": true,
+      "detail": "https://ark.cn-beijing.volces.com/api/plan/v3",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "VELA_ARK_API_KEY",
+      "ok": true,
+      "detail": "ark-****646c",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "VELA_ARK_MODEL",
+      "ok": true,
+      "detail": "deepseek-v4-pro",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "VELA_ARK_EMBED_MODEL",
+      "ok": true,
+      "detail": "doubao-embedding-vision",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "VELA_OPENAI_BASE_URL",
+      "ok": true,
+      "detail": "未设置（当前 provider 不需要）",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "VELA_OPENAI_API_KEY",
+      "ok": true,
+      "detail": "未设置（当前 provider 不需要）",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "VELA_OPENAI_MODEL",
+      "ok": true,
+      "detail": "未设置（当前 provider 不需要）",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "VELA_PROFILE",
+      "ok": true,
+      "detail": "poc",
+      "kind": "local",
+      "warn": false
+    },
+    {
+      "name": "端点可达",
+      "ok": true,
+      "detail": "ok",
+      "kind": "connectivity",
+      "warn": false
+    },
+    {
+      "name": "鉴权有效",
+      "ok": true,
+      "detail": "ok",
+      "kind": "connectivity",
+      "warn": false
+    },
+    {
+      "name": "模型可用",
+      "ok": true,
+      "detail": "ok",
+      "kind": "connectivity",
+      "warn": false
+    },
+    {
+      "name": "四个逻辑模型映射完整性",
+      "ok": true,
+      "detail": "planner→['deepseek-v4-pro']; verifier→['deepseek-v4-pro']; reporter→['deepseek-v4-pro']; distiller→['deepseek-v4-pro']",
+      "kind": "connectivity",
+      "warn": false
+    }
+  ],
+  "checks_passed": true,
+  "local_ok": true
+}
