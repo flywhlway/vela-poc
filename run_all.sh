@@ -13,6 +13,9 @@ export PYTHONPATH="$ROOT/src"
 export VELA_CONFIG_DIR="$ROOT/config"
 export VELA_WORKSPACE="$ROOT/workspace/run_all"
 export PYTHONHASHSEED=0
+# 演示链路钉死 mock：.env 若为 volcengine，不得在 diagnose/eval 打真实付费 API。
+# 进程环境优先于 dotenv（override=False），故须在调用 Python 前 export。
+export VELA_LLM_PROVIDER=mock
 
 # 与 Makefile / Plan 01 解释器约定对齐：优先 PYTHON=，其次 .venv，最后系统 python3
 if [ -z "${PYTHON:-}" ]; then

@@ -35,6 +35,13 @@ def main() -> int:
     ap.add_argument("--dataset", default=str(ROOT / "data" / "demo_dataset"))
     args = ap.parse_args()
 
+    # 须在首次 import vela（触发 .env 加载）之前钉死 provider：
+    # dotenv override=False → 进程环境优先；默认 mock 保证 make demo 零付费。
+    if args.provider:
+        os.environ["VELA_LLM_PROVIDER"] = args.provider
+    else:
+        os.environ["VELA_LLM_PROVIDER"] = "mock"
+
     t0 = time.time()
 
     _hr(f"第 1 步 / 4：仿真生成场景 {args.scenario}")
