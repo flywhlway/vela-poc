@@ -82,7 +82,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 02-05-PLAN.md — 过程指标聚合 + 消融评测集（METR-05/08）
+- [x] 02-05-PLAN.md — 过程指标聚合 + 消融评测集（METR-05/08）
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -176,7 +176,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. 真实 LLM 环境就绪 | 8/8 | Complete    | 2026-07-31 |
-| 2. 度量可信与真实基线 | 4/6 | In Progress|  |
+| 2. 度量可信与真实基线 | 5/6 | In Progress|  |
 | 3. 编排层逻辑止血 | 0/TBD | Not started | - |
 | 4. 去循环耦合与反馈闭环 | 0/TBD | Not started | - |
 | 5. 置信度分级与技能治理 | 0/TBD | Not started | - |
