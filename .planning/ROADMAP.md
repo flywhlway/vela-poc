@@ -12,7 +12,7 @@
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 - [x] **Phase 1: 真实 LLM 环境就绪** - 打通火山引擎方舟真实环境，`.env` 自动加载 + provider 切换 + `vela doctor` 连通性自检 (completed 2026-07-31)
-- [ ] **Phase 2: 度量可信与真实基线** - 修正评测闸门与指标基础设施，在真实 LLM 上建立带置信区间的准确率、成本、延迟新基线
+- [x] **Phase 2: 度量可信与真实基线** - 修正评测闸门与指标基础设施，在真实 LLM 上建立带置信区间的准确率、成本、延迟新基线 (completed 2026-07-31)
 - [ ] **Phase 3: 编排层逻辑止血** - 消除首轮误停 / JSON 解析 / 截断 / verifier 判据 / 技能锁死等逻辑必然缺陷
 - [ ] **Phase 4: 去循环耦合与反馈闭环** - 提取器框架化解耦仿真器依赖，补全 planner 反馈闭环并加固注入安全
 - [ ] **Phase 5: 置信度分级与技能治理** - 六级置信度替换二元判据，技能库四职责分离与治理工具落地
@@ -86,7 +86,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 02-06-PLAN.md — 真实无缓存方差基线 + bench 收尾（METR-09/PERF-01）
+- [x] 02-06-PLAN.md — 真实无缓存方差基线 + bench 收尾（METR-09/PERF-01）
 
 ### Phase 3: 编排层逻辑止血
 
@@ -176,7 +176,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. 真实 LLM 环境就绪 | 8/8 | Complete    | 2026-07-31 |
-| 2. 度量可信与真实基线 | 5/6 | In Progress|  |
+| 2. 度量可信与真实基线 | 6/6 | Complete   | 2026-07-31 |
 | 3. 编排层逻辑止血 | 0/TBD | Not started | - |
 | 4. 去循环耦合与反馈闭环 | 0/TBD | Not started | - |
 | 5. 置信度分级与技能治理 | 0/TBD | Not started | - |
