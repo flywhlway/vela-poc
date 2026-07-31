@@ -186,7 +186,9 @@ def tenant_id() -> str:
 def config_hash() -> str:
     """
     参数与规则集的联合指纹，写入 runs.config_hash；跨 run 比较指纹前必须一致。
-    覆盖：pipeline.yaml + parsers.yaml + ota_phases.yaml + 规范化规则版本 + 实际生效的哈希算法。
+    覆盖：pipeline/parsers/ota_phases + 规范化规则版本 + 哈希算法
+    + budget/llm/skills + gateway/prompts.py 内容哈希。
+    明确排除 env_checks.yaml（诊断专用，Phase 1 D-16 / Phase 2 D-06）。
     """
     import hashlib
 
@@ -194,12 +196,19 @@ def config_hash() -> str:
     from vela.util.jsonl import canonical_json
     from vela.util.textutil import canon_rules_version
 
+    prompts_path = Path(__file__).resolve().parent / "gateway" / "prompts.py"
+    prompts_sha256 = hashlib.sha256(prompts_path.read_bytes()).hexdigest()
+
     payload = canonical_json({
         "pipeline": load_yaml("pipeline.yaml"),
         "parsers": load_yaml("parsers.yaml"),
         "phases": load_yaml("ota_phases.yaml"),
         "canon_rules_version": canon_rules_version(),
         "algos": fingerprint_algos(),
+        "budget": load_yaml("budget.yaml"),
+        "llm": load_yaml("llm.yaml"),
+        "skills": load_skills(),
+        "prompts_sha256": prompts_sha256,
     })
     return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
 

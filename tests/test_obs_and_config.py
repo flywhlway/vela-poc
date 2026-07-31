@@ -101,3 +101,70 @@ def test_config_hash_is_deterministic_and_stable_format():
     b = config_hash()
     assert a == b
     assert a.startswith("sha256:") and len(a) == len("sha256:") + 64
+
+
+def test_config_hash_changes_on_skills_budget_llm_prompts(tmp_path, monkeypatch):
+    """METR-03/D-08：四类输入扰动各使 hash 变化；env_checks 不进指纹（D-06）。"""
+    import shutil
+    from pathlib import Path
+
+    import vela.config as cfg
+
+    root = Path(__file__).resolve().parents[1]
+    src_cfg = root / "config"
+    prompts = root / "src" / "vela" / "gateway" / "prompts.py"
+
+    def _fresh_copy() -> Path:
+        dest = tmp_path / f"cfg_{_fresh_copy.n}"
+        _fresh_copy.n += 1
+        shutil.copytree(src_cfg, dest)
+        return dest
+
+    _fresh_copy.n = 0
+
+    def _hash_at(config_root: Path) -> str:
+        monkeypatch.setenv("VELA_CONFIG_DIR", str(config_root))
+        cfg.load_yaml.cache_clear()
+        return config_hash()
+
+    baseline_dir = _fresh_copy()
+    base = _hash_at(baseline_dir)
+    assert base.startswith("sha256:")
+
+    # skills — 改已加载字段（注释不进 yaml.safe_load）
+    d = _fresh_copy()
+    skill_f = d / "skills" / "builtin.yaml"
+    text = skill_f.read_text(encoding="utf-8")
+    skill_f.write_text(text.replace("version: 3", "version: 999", 1), encoding="utf-8")
+    assert _hash_at(d) != base
+
+    # budget.yaml
+    d = _fresh_copy()
+    bf = d / "budget.yaml"
+    bf.write_text(bf.read_text(encoding="utf-8").replace("max_rounds: 30", "max_rounds: 31", 1),
+                  encoding="utf-8")
+    assert _hash_at(d) != base
+
+    # llm.yaml
+    d = _fresh_copy()
+    lf = d / "llm.yaml"
+    lf.write_text(lf.read_text(encoding="utf-8").replace("temperature: 0.1", "temperature: 0.11", 1),
+                  encoding="utf-8")
+    assert _hash_at(d) != base
+
+    # env_checks.yaml — must NOT change hash（即便改实质字段）
+    d = _fresh_copy()
+    ef = d / "env_checks.yaml"
+    ef.write_text(ef.read_text(encoding="utf-8") + "\nperturb_key: true\n", encoding="utf-8")
+    assert _hash_at(d) == base
+
+    # prompts.py — temporary byte tweak then restore
+    original = prompts.read_bytes()
+    try:
+        prompts.write_bytes(original + b"\n# hash-perturb-prompts\n")
+        cfg.load_yaml.cache_clear()
+        monkeypatch.setenv("VELA_CONFIG_DIR", str(baseline_dir))
+        assert config_hash() != base
+    finally:
+        prompts.write_bytes(original)
+        cfg.load_yaml.cache_clear()
