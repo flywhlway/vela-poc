@@ -27,15 +27,15 @@
 
 > 阶段 0「仪表校准」。**不改任何推理逻辑。** 完成后当前 44.4% 会被一个带置信区间的新基线取代，且可能因引用闸门生效而进一步下降——这是尺子变准的必然结果（风险 NR-1，已提前对齐）。
 
-- [ ] **METR-01** (C-01/F-01): 一份完全没有 `[[EV:row_hash]]` 引用的报告被质量闸门强制判失败；`citation_coverage`（有引用的事实句 / 事实句总数）作为新指标进入评测报表
-- [ ] **METR-02** (C-02): `dangling_rate` 在 `total == 0` 时返回 `None` 而非 `0.0`，并新增 `has_citations` 布尔门；`total == 0` 分支有专门单测覆盖
-- [ ] **METR-03** (C-11/F-10): 工程师修改技能库 / `budget.yaml` / `llm.yaml` / 提示词内容后，`config_hash` 必定改变；变更同时记录 hash 版本映射表以承接指纹断代（NR-6）
-- [ ] **METR-04** (C-12/F-02): 工程师可运行 `vela eval run --repeat N`，报告输出各指标的均值±标准差与置信区间
-- [ ] **METR-05** (C-13/F-03): 7 项过程指标（`premature_stop_rate` / `llm_parse_failure_rate` / `llm_truncation_rate` / `verdict_supported_ratio` / `skill_switch_per_session` / `unexplained_error_rate` / `citation_coverage`）与每轮决策轨迹表进入评测报表，归因无需再人工刨 `events.jsonl`
-- [ ] **METR-06** (C-14/F-09): LLM 响应按 `(provider, physical_model, prompt_sha256, params)` 做磁盘缓存，`--no-cache` 可关；重复评测缓存命中率 > 90%
-- [ ] **METR-07** (C-28/F-12): 工程师可运行 `vela eval run --reuse-workspace` 跳过已存在证据库的重建，单轮迭代省去约 80 秒
-- [ ] **METR-08** (ADR-8/KB §3.4): 工程师可运行消融评测集（10 场景 × 逐个剔除正确技能构造未知故障用例），4 项泛化指标 `misdiagnosis_rate_under_ablation` / `novel_detection_recall` / `unexplained_error_rate` / `confidence_calibration_error` 进入 `_TARGETS`
-- [ ] **METR-09** (NR-5): 在 `--no-cache` 条件下产出真实火山引擎 LLM 的方差基线报告，取代当前无置信区间的 44.4%，作为本里程碑后续一切判断的地基
+- [x] **METR-01** (C-01/F-01): 一份完全没有 `[[EV:row_hash]]` 引用的报告被质量闸门强制判失败；`citation_coverage`（有引用的事实句 / 事实句总数）作为新指标进入评测报表
+- [x] **METR-02** (C-02): `dangling_rate` 在 `total == 0` 时返回 `None` 而非 `0.0`，并新增 `has_citations` 布尔门；`total == 0` 分支有专门单测覆盖
+- [x] **METR-03** (C-11/F-10): 工程师修改技能库 / `budget.yaml` / `llm.yaml` / 提示词内容后，`config_hash` 必定改变；变更同时记录 hash 版本映射表以承接指纹断代（NR-6）
+- [x] **METR-04** (C-12/F-02): 工程师可运行 `vela eval run --repeat N`，报告输出各指标的均值±标准差与置信区间
+- [x] **METR-05** (C-13/F-03): 7 项过程指标（`premature_stop_rate` / `llm_parse_failure_rate` / `llm_truncation_rate` / `verdict_supported_ratio` / `skill_switch_per_session` / `unexplained_error_rate` / `citation_coverage`）与每轮决策轨迹表进入评测报表，归因无需再人工刨 `events.jsonl`
+- [x] **METR-06** (C-14/F-09): LLM 响应按 `(provider, physical_model, prompt_sha256, params)` 做磁盘缓存，`--no-cache` 可关；重复评测缓存命中率 > 90%
+- [x] **METR-07** (C-28/F-12): 工程师可运行 `vela eval run --reuse-workspace` 跳过已存在证据库的重建，单轮迭代省去约 80 秒
+- [x] **METR-08** (ADR-8/KB §3.4): 工程师可运行消融评测集（10 场景 × 逐个剔除正确技能构造未知故障用例），4 项泛化指标 `misdiagnosis_rate_under_ablation` / `novel_detection_recall` / `unexplained_error_rate` / `confidence_calibration_error` 进入 `_TARGETS`
+- [x] **METR-09** (NR-5): 在 `--no-cache` 条件下产出真实火山引擎 LLM 的方差基线报告，取代当前无置信区间的 44.4%，作为本里程碑后续一切判断的地基
 
 ### ORCH —— 编排层逻辑止血
 
@@ -102,8 +102,8 @@
 
 > G6 可运维层。当前完全无法回答生产场景的基本问题：单次诊断的 token 成本？P95 端到端延迟？这直接决定产品形态（同步接口 vs 异步任务）。
 
-- [ ] **PERF-01** (C-36/F-13): `scripts/bench.py` 覆盖真实火山引擎 provider，产出单次诊断的 token 成本与端到端 P95 延迟基线（当前只测建库吞吐与 mock 诊断延迟）
-- [ ] **PERF-02** (G6): 单次诊断 token 成本上限进入配置并在超限时告警，`TokenLedger` 从「只做预算切断」扩展为「成本归集可观测」
+- [x] **PERF-01** (C-36/F-13): `scripts/bench.py` 覆盖真实火山引擎 provider，产出单次诊断的 token 成本与端到端 P95 延迟基线（当前只测建库吞吐与 mock 诊断延迟）
+- [x] **PERF-02** (G6): 单次诊断 token 成本上限进入配置并在超限时告警，`TokenLedger` 从「只做预算切断」扩展为「成本归集可观测」
 
 ---
 
@@ -172,17 +172,17 @@
 | ENV-02 | Phase 1 | Complete |
 | ENV-03 | Phase 1 | Complete |
 | ENV-04 | Phase 1 | Complete |
-| METR-01 | Phase 2 | Pending |
-| METR-02 | Phase 2 | Pending |
-| METR-03 | Phase 2 | Pending |
-| METR-04 | Phase 2 | Pending |
-| METR-05 | Phase 2 | Pending |
-| METR-06 | Phase 2 | Pending |
-| METR-07 | Phase 2 | Pending |
-| METR-08 | Phase 2 | Pending |
-| METR-09 | Phase 2 | Pending |
-| PERF-01 | Phase 2 | Pending |
-| PERF-02 | Phase 2 | Pending |
+| METR-01 | Phase 2 | Complete |
+| METR-02 | Phase 2 | Complete |
+| METR-03 | Phase 2 | Complete |
+| METR-04 | Phase 2 | Complete |
+| METR-05 | Phase 2 | Complete |
+| METR-06 | Phase 2 | Complete |
+| METR-07 | Phase 2 | Complete |
+| METR-08 | Phase 2 | Complete |
+| METR-09 | Phase 2 | Complete |
+| PERF-01 | Phase 2 | Complete |
+| PERF-02 | Phase 2 | Complete |
 | ORCH-01 | Phase 3 | Pending |
 | ORCH-02 | Phase 3 | Pending |
 | ORCH-03 | Phase 3 | Pending |
