@@ -24,7 +24,9 @@ class Auditor:
                physical_model: str, provider: str, prompt: str, completion: str,
                prompt_tokens: int, completion_tokens: int, latency_ms: float,
                redaction_hits: dict, ok: bool, error: str | None = None,
-               fallback_from: str | None = None) -> dict:
+               fallback_from: str | None = None,
+               finish_reason: str | None = None,
+               cache_hit: bool = False) -> dict:
         rec = {
             "ts_utc": iso(datetime.now(UTC)),
             "session_id": session_id, "round_no": round_no,
@@ -35,6 +37,8 @@ class Auditor:
             "latency_ms": round(latency_ms, 2),
             "redaction_hits": redaction_hits,
             "completion_chars": len(completion or ""),
+            "finish_reason": finish_reason,
+            "cache_hit": bool(cache_hit),
         }
         if self.log_prompt_hash:
             rec["prompt_sha256"] = hashlib.sha256((prompt or "").encode("utf-8")).hexdigest()

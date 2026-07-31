@@ -256,3 +256,71 @@ def test_openai_compat_probe_detail_masks_api_key(monkeypatch):
     monkeypatch.setattr(p, "_client", lambda: _stub_chat_client(leak))
     detail = p.probe("ep-x")["detail"]
     assert key not in detail
+
+
+# --------------------------------------------------------------------- cache / cost (Phase 2)
+def test_llm_disk_cache_hit_skips_provider_complete(tmp_path, monkeypatch):
+    """同键二次 chat：第二次命中缓存，不调用 provider.complete。"""
+    from vela.gateway.base import LLMGateway, LLMRequest
+    from vela.gateway.cache import LLMDiskCache
+    from vela.gateway.mock import MockProvider
+
+    monkeypatch.setenv("VELA_LLM_CACHE", "0")  # 显式走构造参数
+    calls = {"n": 0}
+    provider = MockProvider({"deterministic": True}, name="mock")
+    orig = provider.complete
+
+    def counted(req, phys, params):
+        calls["n"] += 1
+        return orig(req, phys, params)
+
+    provider.complete = counted  # type: ignore[method-assign]
+    cache = LLMDiskCache(tmp_path / "llm", enabled=True)
+    gw = LLMGateway(provider, cache=cache, session_id="CACHE-1",
+                    audit_path=tmp_path / "a.jsonl")
+    req = LLMRequest(logical_model="planner", system="s", user="hello cache")
+    r1 = gw.chat(req)
+    assert r1.cache_hit is False and calls["n"] == 1
+    r2 = gw.chat(req)
+    assert r2.cache_hit is True and calls["n"] == 1
+    assert r2.text == r1.text
+    assert gw.ledger.cache_hits == 1
+    assert gw.history[-1]["finish_reason"] is not None
+    assert gw.history[-1]["cache_hit"] is True
+
+
+def test_llm_cache_disabled_does_not_write(tmp_path, monkeypatch):
+    monkeypatch.setenv("VELA_LLM_CACHE", "0")
+    from vela.gateway.base import LLMGateway, LLMRequest
+    from vela.gateway.cache import LLMDiskCache
+    from vela.gateway.mock import MockProvider
+
+    cache = LLMDiskCache(tmp_path / "llm", enabled=False)
+    gw = LLMGateway(MockProvider({}, name="mock"), cache=cache, session_id="CACHE-OFF")
+    gw.chat(LLMRequest(logical_model="planner", user="x"))
+    assert list((tmp_path / "llm").glob("*.json")) == [] if (tmp_path / "llm").exists() else True
+
+
+def test_token_ledger_cost_snapshot_and_alert_not_budget_exceeded():
+    from vela.config import load_budget
+    alerts: list[tuple[str, dict]] = []
+    ledger = TokenLedger(
+        budget=load_budget("poc"),
+        cost_rates={"input_per_1k": 10.0, "output_per_1k": 20.0, "diagnose_cost_alert": 0.01},
+        on_alert=lambda kind, payload: alerts.append((kind, payload)),
+    )
+    ledger.charge("planner", 100, 50)
+    snap = ledger.snapshot()
+    assert snap["prompt_tokens"] == 100
+    assert snap["completion_tokens"] == 50
+    assert snap["estimated_cost_usd"] > 0.01
+    assert alerts and alerts[0][0] == "cost.alert"
+    # 告警后仍可继续 charge，不抛 BudgetExceeded
+    ledger.charge("verifier", 1, 1)
+
+
+def test_token_budget_hard_cut_still_raises():
+    from vela.config import load_budget
+    ledger = TokenLedger(budget=load_budget("poc"))
+    with pytest.raises(BudgetExceeded):
+        ledger.precheck(ledger.budget.round_llm_tokens + 1)
