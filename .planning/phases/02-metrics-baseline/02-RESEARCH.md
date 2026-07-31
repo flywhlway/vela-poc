@@ -1,8 +1,16 @@
-# Phase 2: 度量可信与真实基线 - Research
+# Phase 2: metrics-baseline - Research
 
 **Researched:** 2026-07-31
-**Domain:** 评测闸门 / 配置指纹 / 重复评测统计 / LLM 磁盘缓存 / 消融评测 / Token 成本归集 / 真实火山引擎基线
+**Domain:** 评测度量可信度 / 真实 LLM 方差基线 / Token 成本可观测（不改 AgentGraph 推理）
 **Confidence:** HIGH
+
+## Summary
+
+Phase 2 是 ADR-2「先修尺子再修系统」的落地：修正引用闸门与 `config_hash` 指纹、扩展评测 runner/报表（`--repeat` / 过程指标 / 消融 / 缓存 / workspace 复用）、扩展 `TokenLedger` 成本归集与 `scripts/bench.py`，最后在 `--no-cache` + volcengine 下产出取代 44.4% 的带 95% CI 基线。实现面几乎全部落在 `citations.py`、`config.py`、`eval/*`、`cli.py`、`gateway/*`、`budget.py`、`scripts/bench.py`——**禁止**改 `graph.py` 节点控制流或提示词语义。
+
+代码现状与锁定决策对齐度高：`CitationReport.ok` 在零引用时仍为 True（F-01 未修）；`config_hash` 只覆盖 pipeline/parsers/ota_phases；`cmd_eval` 无 `--repeat`/`--reuse-workspace`/`--no-cache`/`--ablation`；`TokenLedger` 只有硬切断无成本字段；`Auditor` 不落 `finish_reason`（截断率需在网关侧补字段才能可测）。消融可借已有 `AgentGraph(skills=SkillRegistry(...))` 注入点做运行时 mask，无需改技能 YAML。Student t 95% CI 用 `scipy.stats.t.interval` + `stats.sem`（已用 Context7/官方 API 与本机实测验证）。
+
+**Primary recommendation:** 按锁定顺序先交付 METR-01~08 + PERF-02（尺子与可观测基础设施），用 mock 全量回归钉住契约；METR-09/PERF-01 收尾在 `--no-cache` 真实 LLM 下写入 `.planning/phases/02-metrics-baseline/baseline/`，并废止 44.4% 对比口径。
 
 <user_constraints>
 ## User Constraints (from CONTEXT.md)
@@ -85,278 +93,179 @@ None — discussion stayed within phase scope（无折叠 todo）
 
 | ID | Description | Research Support |
 |----|-------------|------------------|
-| METR-01 | 零引用报告质量闸门失败；`citation_coverage` 入报表 | 修 `CitationReport.ok`/`has_citations`；新增事实句切分 + coverage；eval/CLI 消费 `ok` |
-| METR-02 | `dangling_rate` 在 `total==0` 返回 `None`；单测钉死 | 改 `citations.py` 属性与 `to_dict()`；更新 runner 聚合对 `None` 的处理 |
-| METR-03 | config_hash 覆盖 skills/budget/llm/prompts；映射表承接断代 | 扩展 `config_hash()` payload；新建 `docs/CONFIG_HASH_HISTORY.md`；四类扰动单测 |
-| METR-04 | `vela eval run --repeat N` → 均值±标准差与 95% t-CI | CLI 旗标 + `eval/stats.py`（scipy）+ 报表双层输出 |
-| METR-05 | 7 项过程指标 + 决策轨迹表入报表 | eval 侧从 `DiagnosisResult.events` / state / report 聚合；不改 graph 控制流 |
-| METR-06 | LLM 磁盘缓存键四元组；`--no-cache`；命中率 >90% | `LLMGateway.chat` 在脱敏后、provider 前查/写缓存 |
-| METR-07 | `--reuse-workspace` 跳过已建成可用库 | `EvalRunner._one` 检查 `gold/analysis.duckdb` + `qa/qa_report.json.checks_passed` |
-| METR-08 | 消融评测集 + 四泛化指标入 `_TARGETS` | 运行时 mask `expected_skills`；代理口径标注；`--ablation` 旗标 |
-| METR-09 | `--no-cache` + volcengine N≥3 方差基线落盘 | 收尾人工/Makefile 目标；产物进 `baseline/`；取代 44.4% |
-| PERF-01 | bench 覆盖真实 provider：token 成本 + P95 延迟 | 扩展 `scripts/bench.py`；与 METR-09 共用数据 |
-| PERF-02 | TokenLedger 成本归集；超限 ALERT；单价入 config | 扩展 `budget.yaml` + `TokenLedger.snapshot()`；告警不替代硬切断 |
+| METR-01 | 零引用报告质量闸门失败；`citation_coverage` 入报表 | D-01~D-04；改 `CitationReport.ok`/`has_citations`；`eval` 计算 coverage；禁止改 `node_report` |
+| METR-02 | `dangling_rate` 在 total==0 → `None`；`has_citations`；单测 | 同 citations.py；同步 `to_dict` 与 runner 对 None 的聚合 |
+| METR-03 | skills/budget/llm/prompts 进 `config_hash`；映射表 | 扩展 `config_hash` payload；新建 `docs/CONFIG_HASH_HISTORY.md`；排除 `env_checks.yaml` |
+| METR-04 | `--repeat N` → 均值±标准差 + 95% CI | `scipy.stats.t.interval`；默认单次不变；报表含逐次明细 |
+| METR-05 | 7 项过程指标 + 决策轨迹表 | 从 SessionState/events/audit 聚合；网关补 `finish_reason` 落审计；代理公式见下文 |
+| METR-06 | LLM 磁盘缓存 + `--no-cache`；命中率 >90% | 挂 `LLMGateway.chat` 脱敏后；键=(provider, physical_model, prompt_sha256, params) |
+| METR-07 | `--reuse-workspace` 跳过重建 | 以 `gold/analysis.duckdb` + `manifest.json` + `qa/qa_report.json` 为可用判据 |
+| METR-08 | 消融评测集 + 4 泛化指标入 `_TARGETS` | 运行时 `SkillRegistry` mask；代理 novel/calibration；不要求达标 |
+| METR-09 | `--no-cache` 真实 LLM 方差基线 | 收尾行；落盘 `baseline/`；废止 44.4%；`realllm` 门禁 |
+| PERF-01 | bench 覆盖 volcengine；成本+P95 | 扩展 `scripts/bench.py`；可与 METR-09 同次采集 |
+| PERF-02 | TokenLedger 成本归集 + 超限 ALERT | `budget.yaml` 单价/上限；ALERT 不替代 `BudgetExceeded` |
 </phase_requirements>
-
-## Summary
-
-Phase 2 的本质是「先修尺子」：当前 `CitationReport` 在零引用时返回 `dangling_rate=0.0` 且 `ok=True`（F-01），`config_hash` 仅覆盖 pipeline/parsers/ota_phases（F-10），评测 runner 单次出数无置信区间（F-02），过程指标与消融集缺失，bench 只测 mock。本阶段按 ADR-2 **禁止改 `AgentGraph` 节点控制流与提示词诱导行为**，只改度量/指纹/评测/缓存/成本归集面，并在闸门口径稳定后用真实火山引擎跑 N≥3 无缓存基线。
-
-代码面已具备可复用骨架：`CitationReport`/`verify_citations`、`EvalRunner`/`_TARGETS`/`cmd_eval`、`TokenLedger`、`LLMGateway.chat` 脱敏→预算→降级链、`SkillRegistry(skills=…)` 可注入、`qa_report.json.checks_passed`、`.cache/` 已在 `.gitignore`、`doctor --json` 指纹、`realllm` 默认排除。主要缺口是闸门语义、指纹覆盖、CLI 旗标、统计聚合、缓存钩子、过程/消融指标代理定义，以及基线产物目录。
-
-**Primary recommendation:** 按「闸门+指纹 → 缓存/reuse/repeat/过程/消融/成本 → 收尾真实基线」顺序落地；scipy 作可选 `[eval]` 依赖算 t-CI；缓存挂在脱敏后的 `LLMGateway.chat`；消融用运行时 skill mask；基线写入 `.planning/phases/02-metrics-baseline/baseline/` 并宣告 44.4% 退役。
 
 ## Architectural Responsibility Map
 
 | Capability | Primary Tier | Secondary Tier | Rationale |
 |------------|-------------|----------------|-----------|
-| 引用闸门语义 / citation_coverage | API / Backend（agent 确定性校验） | Eval 报表 | 程序化校验独立于模型；eval 消费 `ok`/`coverage` |
-| config_hash 指纹 | API / Backend（config） | Evidence pack salt | hash 写入 runs / Merkle salt；断代文档在 docs |
-| 重复评测 + t-CI | API / Backend（eval） | CLI | 纯本地统计，无浏览器层 |
-| LLM 磁盘缓存 | API / Backend（gateway） | Filesystem `.cache/` | 出站路径唯一挂载点；须在脱敏后 |
-| workspace 复用 | API / Backend（eval runner） | Database / Storage | 复用 Gold DuckDB + QA 标记 |
-| 过程指标聚合 | API / Backend（eval） | Obs events | 不改 graph；从 events/state 聚合 |
-| 消融评测 | API / Backend（eval） | Skills registry | 运行时 mask，不改 YAML |
-| Token 成本归集 / 告警 | API / Backend（gateway budget） | Config YAML | 告警走 EventBus；硬切断语义不变 |
-| 真实基线跑数 | API / Backend（CLI/Makefile） | External LLM | 付费、`--no-cache`、人工门 |
-| doctor 指纹嵌入基线元数据 | CLI | — | 只读消费既有 JSON 契约 |
+| 引用闸门语义 / citation_coverage | API / Backend（`agent/citations` + `eval`） | — | 确定性校验与报表聚合，不在浏览器 |
+| config_hash 指纹与断代表 | API / Backend（`config.py`）+ Docs | Database（evidence pack salt） | 指纹写入 runs/证据包；映射表为人读文档 |
+| `--repeat` / CI 聚合 | API / Backend（`eval` + CLI） | — | 本地 CLI 评测编排 |
+| LLM 磁盘缓存 | API / Backend（`LLMGateway`） | CDN/Static（本地 `.cache/` 文件） | 出站路径缓存；非服务端边缘 |
+| `--reuse-workspace` | API / Backend（`EvalRunner`） | Database / Storage（DuckDB workspace） | 跳过 build，读已有 Gold |
+| 过程指标 / 决策轨迹 | API / Backend（`eval` 聚合） | Database（events.jsonl / sessions） | 不改图节点，事后聚合 |
+| 消融 mask | API / Backend（`EvalRunner` + `SkillRegistry`） | — | 构造期注入 skills，不改 YAML |
+| TokenLedger 成本归集 | API / Backend（`gateway/budget`） | Config（`budget.yaml`） | 会话级计量 + 配置单价 |
+| 真实基线 / bench | API / Backend（CLI/scripts） | 外部 LLM（volcengine） | 付费实测；产物落 planning/baseline |
+| 测试与回归门 | API / Backend（pytest） | — | mock 默认；realllm 排除 |
 
-## Project Constraints (from .cursor/rules/)
+## Project Constraints (from .cursor/rules/ + AGENTS.md)
 
-仓库内无 `.cursor/rules/` 文件。以下约束来自 `AGENTS.md` / Phase 1 永久决策，planner 须同等遵守：
+仓库无 `.cursor/rules/` 与项目级 `.cursor/skills/`。生效约束来自 `AGENTS.md`（与 Phase 1 D-01 对齐）：
 
-- Gold 库只经 `LogQueryAPI.call()`；本阶段消融/过程指标若查库须走门面或复用已开的 AgentGraph API，禁止直连 DuckDB。
-- 配置驱动：成本单价/上限、缓存根目录覆盖放 `config/*.yaml` 或 env，业务不硬编码。
-- Provider 只经 `gateway/base.py::Provider`；缓存不得引入 provider 专属分支。
-- 程序化校验优先于模型自述；引用闸门修复属确定性路径。
-- 图节点即方法；**禁止**在 `agent/nodes/` 建文件；**禁止**改 `graph.py` 控制流（D-24）。
+- 查询唯一收口：`LogQueryAPI.call()`；禁止评测路径绕过门面直连 DuckDB（过程指标若扫 ERROR 行须经 API）。
+- 配置驱动：阈值/单价/缓存目录进 `config/*.yaml` 或环境变量；`load_yaml` 有 `lru_cache`——改配置须重启或清 cache。
+- 模型可插拔：缓存/bench 不得写 provider 专属分支；只认 `Provider` / `VELA_LLM_PROVIDER`。
+- 程序化校验优先：引用闸门独立于模型自述。
+- 图节点即方法：本阶段**不**在 `agent/nodes/` 建文件，也**不**改节点行为。
+- 单线程同步；不引入并发框架；DuckDB `read_only=True`。
+- 三方库优先（Phase 1 D-01）：统计用 scipy/numpy；禁止手写脆弱数值栈。
 - 不用 `logging`；结构化事件走 `EventBus`；CLI 用 `print()`。
-- 三方库优先（D-01）；本地优先，不引入必须联网才能跑通主链路的依赖。
-- 出站脱敏必须保留；缓存键基于脱敏后 prompt。
-- 完成判据：`make test-fast`；涉及评测/网关须 `make test`；付费用 `realllm` 排除。
-
-## Current State & Gaps
-
-### 引用闸门（F-01）— VERIFIED
-
-```27:37:src/vela/agent/citations.py
-    @property
-    def dangling_rate(self) -> float:
-        return round(len(self.dangling) / self.total, 4) if self.total else 0.0
-
-    @property
-    def ok(self) -> bool:
-        return not self.dangling
-```
-
-- `total==0` → `dangling_rate=0.0`、`ok=True`：零引用报告「满分」。[VERIFIED: codebase]
-- `to_dict()` 无 `has_citations`；`node_report` 写 `st.citation_check = rep.to_dict()` 但不因 `ok` 改 status（符合 D-04，Phase 2 不改重试）。[VERIFIED: codebase]
-- `EvalRunner`：`cr.dangling_rate = float(...get("dangling_rate", 0.0))` —— `None` 会炸；`metrics()` 对 dangling 做简单均值，未消费 `ok`/`has_citations`/`citation_coverage`。[VERIFIED: codebase]
-- `cmd_eval` 退出码用 `dangling_citation_rate <= 0.015`，不检查 `has_citations`。[VERIFIED: codebase]
-- 现有单测覆盖悬空/合法引用，**无** `total==0` 分支钉死。[VERIFIED: tests/test_agent.py]
-
-### config_hash（F-10）— VERIFIED
-
-```186:204:src/vela/config.py
-def config_hash() -> str:
-    payload = canonical_json({
-        "pipeline": load_yaml("pipeline.yaml"),
-        "parsers": load_yaml("parsers.yaml"),
-        "phases": load_yaml("ota_phases.yaml"),
-        "canon_rules_version": canon_rules_version(),
-        "algos": fingerprint_algos(),
-    })
-```
-
-- 未纳入：`config/skills/*.yaml`（经 `load_skills()`）、`budget.yaml`、`llm.yaml`、`gateway/prompts.py`。[VERIFIED: codebase]
-- `env_checks.yaml` 本就不在 payload（保持 D-06）。[VERIFIED: codebase]
-- `docs/CONFIG_HASH_HISTORY.md` 不存在。[VERIFIED: filesystem]
-- 单测仅断言确定性与 `sha256:` 格式，无扰动断言。[VERIFIED: tests/test_obs_and_config.py]
-
-### 评测 runner / CLI — VERIFIED
-
-- `EvalRunner._one` **总是** `build_evidence_db`；无 reuse、无 repeat、无 ablation、无 cache 旗标。[VERIFIED: codebase]
-- `cmd_eval` / argparse 仅 `--dataset/--workspace/--out/--provider/--profile`。[VERIFIED: codebase]
-- `_TARGETS` 6 项，无过程/消融/coverage 目标。[VERIFIED: eval/report.py]
-- `CaseResult` 无过程字段；`RoundRecord` 无 stop/verdicts/finish_reason。[VERIFIED: codebase]
-
-### 缓存 — VERIFIED
-
-- 网关无磁盘缓存；`.gitignore` 已有 `.cache/`。[VERIFIED: codebase + .gitignore]
-- `Auditor` 已算 `prompt_sha256`，但不写响应体、不记 `finish_reason`。[VERIFIED: gateway/audit.py]
-
-### TokenLedger / bench — VERIFIED
-
-- `TokenLedger`：tokens 累计 + `BudgetExceeded`；无成本估算/上限告警。[VERIFIED: gateway/budget.py]
-- `budget.yaml`：无单价、无诊断成本上限段。[VERIFIED: config/budget.yaml]
-- `scripts/bench.py`：建库吞吐 + 诊断延迟 P50/P95；默认 provider=None（走配置，常为 mock）；无 token 成本、无 volcengine 专用路径、无 `--no-cache`。[VERIFIED: scripts/bench.py]
-
-### 过程指标数据源缺口 — VERIFIED
-
-| 指标 | 现有信号 | Phase 2 聚合策略（不改 graph 控制流） |
-|------|----------|----------------------------------------|
-| premature_stop_rate | `events` 中 `plan.done` 含 `stop` + `round_no` | 会话在 `round_no<=1` 且 `stop=True` 的占比 |
-| llm_parse_failure_rate | `_parse_json` 失败静默返回 `{}`，无计数器 | **代理**：`plan.done` 且 `skill is None` 且 `stop=False` 且 actions 空；报表标注代理 |
-| llm_truncation_rate | `LLMResponse.finish_reason` 存在但未入 audit | **允许**在 gateway/audit 记录 `finish_reason`（非推理逻辑）；再聚合 `length` 占比 |
-| verdict_supported_ratio | `verify.done` 事件含 `supported`/`claims` | `sum(supported)/sum(claims)` |
-| skill_switch_per_session | `st.used_skills` / rounds | 相邻 round `selected_skill` 变化次数均值 |
-| unexplained_error_rate | 无现成字段 | **代理**：结论后 ERROR 行未进入 evidence_pool 的占比（经 `LogQueryAPI`）；或消融专用定义 |
-| citation_coverage | 无 | 对 `report_md` 跑新切分函数 |
-
-[VERIFIED: graph events emit sites + state.py + RCA §4.5]
-
-### 消融 — VERIFIED
-
-- `SkillRegistry(skills=…)` / `AgentGraph(..., skills=)` 已支持注入。[VERIFIED: skills.py / graph.py `__init__`]
-- golden `expected_skills` 可作 mask 清单。[VERIFIED: golden.py]
-- 无消融 runner / 四指标。[VERIFIED: eval/]
-
-## Discretion Recommendations（Claude's Discretion → 钉死建议）
-
-| 灰区 | 建议 | 理由 |
-|------|------|------|
-| 事实句切分 | 分隔符类 `[。！？.!?\n]+`；丢弃空白行；丢弃 `^\s*#{1,6}\s` 标题行与 `^\s*[-*_]{3,}\s*$` 分隔线；句子内存在 `CITE_RX` 即计覆盖 | 确定性、中英混排；易单测 |
-| 缓存格式 | 单文件 blob：`.cache/vela/llm/<key_sha256>.json`，内容 `{response_text, meta, created_at}`；无 LRU（POC 磁盘便宜）；`VELA_LLM_CACHE_DIR` 可覆盖根 | 实现简单；命中可测 |
-| 消融 CLI | `vela eval run --ablation` **旗标**（非新子命令） | 复用 runner/报表路径 |
-| hash 历史表列 | `date \| old_hash \| new_hash \| added_inputs \| reason` | 与 D-07 对齐 |
-| t-CI | **scipy.stats.t.interval**（可选依赖 `eval`） | D-01 + Context7 官方 API；N=2 时 df=1 仍合法 |
-| bench/eval 共用 | 抽出 `vela.eval.stats`（mean/std/ci）与成本读取 helper；bench 调用，不强制 bench 走完整 EvalRunner | 避免重复付费采集逻辑分叉 |
+- 出站必经 `redact.py`；禁止提交 `.env`/密钥。
+- 完成判据：`make test-fast`；涉及建库/查询/推理须 `make test`；行为变化同步 config 与文档。
+- 测试风格（TESTING.md）：不用 `unittest.mock`；用真实 `MockProvider` + `tmp_path`；平面 `tests/test_*.py`。
 
 ## Standard Stack
 
-### Core（已在项目中）
+### Core
 
 | Library | Version | Purpose | Why Standard |
 |---------|---------|---------|--------------|
-| Python | ≥3.11（环境 3.12.13） | 运行时 | 项目约束 [VERIFIED: pyproject + `python3 --version`] |
-| PyYAML | ≥6.0 | 配置/技能加载 | 已有 [VERIFIED: pyproject.toml] |
-| pytest | ≥8.0 | 测试 | 已有 [VERIFIED: pyproject.toml] |
-| openai | ≥1.40 | 火山引擎方舟 | Phase 1 已接入 [VERIFIED: pyproject.toml] |
+| 现有 VELA 栈 | duckdb / pyarrow / PyYAML / pytz / python-dotenv / openai | 主链路 | 已在 `pyproject.toml` `[VERIFIED: pip index + repo]` |
+| scipy | **1.18.0**（PyPI 当前；约束建议 `scipy>=1.11`） | Student t 95% CI（`stats.t.interval` + `stats.sem`） | Phase 1 D-01 + D-10；官方 stats API `[VERIFIED: Context7 /websites/scipy_doc_scipy + 本机实测]` |
+| numpy | **2.5.1**（scipy 依赖；约束建议随 scipy） | 均值/数组运算 | scipy 依赖；`np.mean` 与 t.interval 配套 `[VERIFIED: pip index versions]` |
 
-### Supporting（本阶段新增）
+### Supporting
 
 | Library | Version | Purpose | When to Use |
 |---------|---------|---------|-------------|
-| scipy | 1.18.0（PyPI 当前） | `scipy.stats.t.interval` / `sem` | 仅 `--repeat N` 与基线聚合 [VERIFIED: `pip index versions scipy`] |
-| numpy | 2.5.1（PyPI 当前；scipy 依赖） | scipy 传递依赖 | 随 scipy 安装 [VERIFIED: pip index] |
-
-**Installation（推荐可选 extra，不污染离线主链路）：**
-
-```bash
-# pyproject.toml
-# [project.optional-dependencies]
-# eval = ["scipy>=1.11"]
-# dev = ["pytest>=8.0", "scipy>=1.11"]
-pip install -e ".[dev]"
-```
-
-无 `--repeat` 时主链路不 import scipy；`--repeat`/`make baseline` 若缺包则清晰报错提示安装 `[eval]`。
+| pytest | ≥8.0（已有） | 单测 / realllm 门禁 | 全部 METR/PERF 回归 |
+| 标准库 `hashlib` / `json` / `pathlib` | stdlib | LLM 缓存文件与 cache key | 不引入 diskcache（见 Discretion） |
+| 标准库 `statistics` | stdlib | 可选辅助（mean/stdev） | 可与 scipy 并用；CI 仍以 scipy 为准 |
 
 ### Alternatives Considered
 
 | Instead of | Could Use | Tradeoff |
 |------------|-----------|----------|
-| scipy t.interval | 手写 t 临界值表 | 违反 D-01；易错；CONTEXT 允许但非优选 |
-| scipy | 仅 statistics.stdev + 查表 | 无官方 CI API；小样本脆弱 |
-| 磁盘 blob 缓存 | SQLite / JSONL append-only | 过重；命中查找更复杂 |
-| `--ablation` 旗标 | `vela eval ablation` 子命令 | 多分叉；报表路径重复 |
+| scipy `t.interval` | 手写 t 分位表 / `statistics` | 违反 D-01/D-10；仅当无法装 scipy 时作 fallback（不推荐作主路径） |
+| 标准库 JSON 缓存文件 | `diskcache` 5.6.3 | diskcache 成熟但本阶段缓存语义极简；stdlib 零新依赖、易审计 `[ASSUMED: diskcache 非必需]` |
+| 把 scipy 放进必需依赖 | 仅 `dev`/`all` 可选 | **推荐可选**：离线 mock 主链路不依赖 scipy；`--repeat`/基线聚合时需要 |
 
-**Version verification:** scipy 1.18.0 / numpy 2.5.1 via `pip index versions` on 2026-07-31. [VERIFIED: PyPI via pip]
+**Installation（推荐）：**
+
+```bash
+# 写入 pyproject optional-dependencies.dev/all 与 requirements-optional.txt
+.venv/bin/pip install 'scipy>=1.11'
+# 或 make install-dev 扩展后一次安装
+```
+
+**Version verification:** 2026-07-31 本机 `pip index versions` → scipy 1.18.0、numpy 2.5.1；`slopcheck install scipy numpy` → 二者均为 `[OK]`。`.venv` 内**尚未**安装——计划须含 install 步骤。
 
 ## Package Legitimacy Audit
 
 | Package | Registry | Age | Downloads | Source Repo | slopcheck | Disposition |
 |---------|----------|-----|-----------|-------------|-----------|-------------|
-| scipy | PyPI | 15+ yrs | 极高（科学计算标配） | github.com/scipy/scipy | [OK] | Approved — 建议 optional `[eval]` |
-| numpy | PyPI | 15+ yrs | 极高 | github.com/numpy/numpy | [OK] | Approved — scipy 传递依赖 |
+| scipy | PyPI | 多年（SciPy 科学计算标准库） | 极高 | github.com/scipy/scipy | [OK] | Approved — 建议 `>=1.11` 进 optional `dev`/`all` |
+| numpy | PyPI | 多年 | 极高 | github.com/numpy/numpy | [OK] | Approved — 随 scipy 传递；可不单独钉版本 |
+| diskcache | PyPI | 多年 | 中高 | （未强制） | 未跑（不推荐） | **不采用** — Discretion 选 stdlib 缓存 |
 
-**Packages removed due to slopcheck [SLOP] verdict:** none
-**Packages flagged as suspicious [SUS]:** none
-
-*slopcheck 0.6.1 `slopcheck install scipy numpy` → 2 OK。Context7 文档库 `/websites/scipy_doc_scipy` 确认 `stats.t.interval` 用法。* [VERIFIED: slopcheck + Context7]
+**Packages removed due to slopcheck [SLOP] verdict:** none  
+**Packages flagged as suspicious [SUS]:** none  
 
 ## Architecture Patterns
 
 ### System Architecture Diagram
 
 ```text
-                    ┌─────────────────────────────────────────┐
-                    │  CLI: vela eval run                     │
-                    │  [--repeat N] [--reuse-workspace]       │
-                    │  [--no-cache] [--ablation] [--provider] │
-                    └───────────────────┬─────────────────────┘
-                                        │
-                    ┌───────────────────▼─────────────────────┐
-                    │  EvalRunner                             │
-                    │  for case in golden:                    │
-                    │    reuse? → gold/analysis.duckdb + QA   │
-                    │    else build()                         │
-                    │    skills = mask(expected) if ablation  │
-                    │    AgentGraph.run()                     │
-                    │    aggregate citations/process metrics  │
-                    └───────────┬─────────────┬───────────────┘
-                                │             │
-              ┌─────────────────▼──┐   ┌──────▼──────────────┐
-              │ CitationReport     │   │ DiagnosisResult     │
-              │ ok/has_citations/  │   │ events + state +    │
-              │ coverage           │   │ gateway_stats/cost  │
-              └────────────────────┘   └──────┬──────────────┘
-                                              │
-                    ┌─────────────────────────▼──────────────┐
-                    │ LLMGateway.chat                        │
-                    │  redact → cache lookup → precheck →    │
-                    │  provider.complete → charge ledger →   │
-                    │  cache store                           │
-                    └─────────────────────────▲──────────────┘
-                                              │
-                              .cache/vela/llm/<key>.json
-                                              │
-                    ┌─────────────────────────▼──────────────┐
-                    │ report.py: _TARGETS + process +        │
-                    │ ablation + (optional) repeat aggregate │
-                    │ → eval_report.md / eval_result.json    │
-                    └─────────────────────────┬──────────────┘
-                                              │ METR-09/PERF 收尾
-                    ┌─────────────────────────▼──────────────┐
-                    │ baseline/{report.md, result.json}      │
-                    │ + doctor --json fingerprint            │
-                    └────────────────────────────────────────┘
+                    +-----------------------------------------+
+                    |  CLI: vela eval run                     |
+                    |  flags: --repeat --reuse-workspace      |
+                    |         --no-cache --ablation --provider|
+                    +-------------------+---------------------+
+                                        |
+                    +-------------------v---------------------+
+                    |  EvalRunner                             |
+                    |  1) reuse? -> skip build : build        |
+                    |  2) ablation? -> SkillRegistry(mask)    |
+                    |  3) AgentGraph.run() x cases            |
+                    |  4) aggregate CaseResult + process metrics|
+                    +---------+------------------+------------+
+                              |                  |
+              +---------------v---+    +---------v-----------+
+              | Evidence workspace|    | LLMGateway.chat     |
+              | gold/analysis.duckdb|  | redact -> cache? -> |
+              | manifest + qa_report|  | budget -> Provider  |
+              +-------------------+    +---------+-----------+
+                                                 |
+                                      +----------v----------+
+                                      | .cache/vela/llm/    |
+                                      | TokenLedger(+cost)  |
+                                      | Auditor(+finish_reason)|
+                                      +---------------------+
+                              |
+              +---------------v------------------------------+
+              | report.render_markdown / eval_result.json    |
+              | _TARGETS + process + ablation (+ CI if N>=2) |
+              +---------------+------------------------------+
+                              | METR-09 / PERF-01 (last)
+              +---------------v------------------------------+
+              | baseline/*.md + *.json                       |
+              | + doctor --json fingerprint                  |
+              +----------------------------------------------+
 ```
 
 ### Recommended Project Structure
 
 ```
 src/vela/
-├── agent/citations.py          # dangling_rate/ok/has_citations + coverage
-├── config.py                   # config_hash 扩展
-├── gateway/
-│   ├── base.py                 # chat 缓存钩子
-│   ├── budget.py               # TokenLedger 成本归集
-│   ├── cache.py                # NEW: 磁盘缓存读写
-│   ├── audit.py                # 可选：finish_reason 入审计
-│   └── prompts.py              # 纳入 hash（内容不变）
+├── agent/citations.py          # METR-01/02：ok / has_citations / dangling_rate=None
+├── config.py                   # METR-03：扩展 config_hash payload
 ├── eval/
-│   ├── runner.py               # reuse / ablation / 过程字段
-│   ├── report.py               # _TARGETS + 轨迹表 + 聚合行
-│   ├── stats.py                # NEW: mean/std/t-CI
-│   ├── process.py              # NEW: 7 项过程指标聚合
-│   └── golden.py               # 不变
-├── cli.py                      # eval 旗标
-config/budget.yaml              # cost 段
-docs/CONFIG_HASH_HISTORY.md     # NEW
-scripts/bench.py                # volcengine + 成本
-.planning/phases/02-metrics-baseline/baseline/  # 基线产物
-tests/test_agent.py / test_eval.py / test_obs_and_config.py / test_gateway.py
+│   ├── runner.py               # reuse / ablation / CaseResult 扩展字段
+│   ├── report.py               # _TARGETS + 过程/消融/聚合渲染
+│   ├── stats.py                # NEW：t-interval 聚合（scipy）
+│   ├── process_metrics.py      # NEW：7 项过程指标 + 轨迹表
+│   └── ablation.py             # NEW：mask 技能 + 代理泛化指标
+├── gateway/
+│   ├── base.py                 # METR-06：chat 内缓存钩子；audit 传 finish_reason
+│   ├── budget.py               # PERF-02：成本归集
+│   └── cache.py                # NEW：磁盘缓存读写（stdlib）
+├── cli.py                      # eval 新旗标；基线元数据钩子
+scripts/bench.py                # PERF-01
+docs/CONFIG_HASH_HISTORY.md     # NEW：NR-6 断代
+.planning/phases/02-metrics-baseline/baseline/   # METR-09/PERF 产物
+.cache/vela/llm/                # gitignored（根 .gitignore 已有 .cache/）
+tests/
+├── test_agent.py               # 零引用 ok=False；dangling_rate None
+├── test_obs_and_config.py      # config_hash 四类输入变化；排除 env_checks
+├── test_eval.py                # repeat / process / ablation / coverage
+└── test_gateway.py             # cache hit；TokenLedger cost；finish_reason 审计
 ```
 
-### Pattern 1: 度量侧闸门，不改推理
+### Pattern 1: 引用闸门（度量侧 only）
 
-**What:** 只改 `CitationReport` 语义与 eval 消费；`node_report` 仍写报告，不重试、不改 status 机。
-**When to use:** 全程 Phase 2。
+**What:** `CitationReport` 语义修正后，`to_dict()` 暴露 `has_citations` / `ok` / `dangling_rate: float|None`；eval 把 `ok==False`（含零引用）计为质量闸门失败信号；**不**在 `node_report` 加重试。  
+**When to use:** METR-01/02。  
 **Example:**
 
 ```python
-# 目标语义（D-01/D-02）
+# Source: 本仓库 citations.py 现状 + D-01/D-02
+@property
+def has_citations(self) -> bool:
+    return self.total > 0
+
 @property
 def dangling_rate(self) -> float | None:
     if self.total == 0:
@@ -364,281 +273,232 @@ def dangling_rate(self) -> float | None:
     return round(len(self.dangling) / self.total, 4)
 
 @property
-def has_citations(self) -> bool:
-    return self.total > 0
-
-@property
 def ok(self) -> bool:
     return self.has_citations and not self.dangling
 ```
 
-### Pattern 2: 缓存挂在脱敏之后
+### Pattern 2: 网关缓存（脱敏后、计量一致）
 
-**What:** `chat()` 在 redaction 完成后、`precheck`/`complete` 前查缓存；命中仍 `ledger.charge`（避免缓存绕过预算——**推荐命中也计量**，与「可观测成本」一致；若 planner 选「命中不计量」须在威胁分析中说明）。
-**When to use:** METR-06。
-**Recommendation:** 命中**仍 charge**（用缓存响应中的 token 计数或估算），这样 `--no-cache` 基线与有缓存迭代的成本口径一致区分「API 成本」vs「计量成本」；报表可另计 `cache_hits`。若需「命中不计 API 成本」，在 snapshot 加 `cache_hit: bool` 字段。
-
-**威胁要点：** 缓存明文响应可含日志摘要——目录须 gitignore；键含脱敏后 prompt_sha256，禁止缓存未脱敏内容。
+**What:** 在 `LLMGateway.chat` 完成 redact 之后、调用 `provider.complete` 之前查缓存；命中则构造 `LLMResponse` 并仍走 `ledger.charge`（成本口径与未命中一致），写 audit 时标记 `cache_hit=true`。`--no-cache` / env 关闭时旁路。  
+**When to use:** METR-06；METR-09 强制 `--no-cache`。  
+**Key:** `sha256(canonical_json({provider, physical_model, prompt_sha256, params}))`；文件 `.cache/vela/llm/{key}.json`。
 
 ### Pattern 3: 消融运行时 mask
 
-**What:**
-
-```python
-skills = load_skills()
-masked = [s for s in skills if s["id"] not in set(gc.expected_skills)]
-registry = SkillRegistry(skills=masked)
-g = AgentGraph(..., skills=registry)
-```
-
-**When to use:** `--ablation`；健康场景（无 expected_skills）跳过或计入对照。
+**What:** `EvalRunner` 对故障用例取 `gc.expected_skills`，构造 `SkillRegistry(skills=[s for s in load_skills() if s["id"] not in masked])`，传入 `AgentGraph(..., skills=registry)`。健康用例不 mask。  
+**When to use:** `--ablation`（推荐旗标名，Discretion）。  
+**Why not edit YAML:** D-16 明确禁止持久化残缺技能库。
 
 ### Pattern 4: Student t 95% CI
 
+**What / Example:**
+
 ```python
 # Source: https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.t.html
+# Verified: scipy 1.18.0 本机 — stats.t.interval(0.95, df=n-1, loc=mean, scale=sem)
 from scipy import stats
 import numpy as np
 
-def mean_std_ci(vals: list[float], confidence: float = 0.95) -> dict:
-    a = np.asarray(vals, dtype=float)
-    n = len(a)
-    mean = float(a.mean())
+def mean_ci_95(values: list[float]) -> dict:
+    xs = np.asarray(values, dtype=float)
+    n = xs.size
+    mean = float(np.mean(xs))
+    std = float(np.std(xs, ddof=1)) if n >= 2 else 0.0
     if n < 2:
-        return {"mean": mean, "std": 0.0, "ci95": [mean, mean], "n": n}
-    std = float(a.std(ddof=1))
-    sem = stats.sem(a)
-    lo, hi = stats.t.interval(confidence, df=n - 1, loc=mean, scale=sem)
+        return {"mean": mean, "std": std, "ci95": None, "n": n}
+    sem = float(stats.sem(xs))
+    lo, hi = stats.t.interval(0.95, df=n - 1, loc=mean, scale=sem)
     return {"mean": mean, "std": std, "ci95": [float(lo), float(hi)], "n": n}
 ```
 
-[CITED: docs.scipy.org — scipy.stats.t.interval / sem]
-
 ### Anti-Patterns to Avoid
 
-- **在 graph 里为过程指标加守卫/重试：** 属 Phase 3；本阶段只聚合。
-- **为 novel_detection 实现 CONF-03：** 违反 D-17。
-- **缓存未脱敏 prompt：** 安全违规。
-- **reuse 半成品库：** 缺 `analysis.duckdb` 或 `checks_passed=false` 必须重建或显式失败。
-- **把仿真基线写成能力宣称：** 违反 ADR-3 / D-18。
-- **用手写 t 表替代 scipy：** 违反 D-01（除非 scipy 安装失败的降级文档化路径）。
-- **修改 `env_checks.yaml` 却期望 hash 变：** 不得纳入（D-06）。
+- **改 `node_report` 做引用重试：** Phase 3 ORCH-08；违反 D-04/D-24。
+- **为 novel 指标实现 CONF-03：** 违反 D-17；用代理口径。
+- **缓存未脱敏 prompt：** 安全违规；键与正文必须基于 redact 后文本。
+- **缓存命中跳过 `ledger.charge`：** 成本基线失真；命中仍应按缓存内 token 计数 charge。
+- **`--reuse-workspace` 仅看目录存在：** 半成品库（无 duckdb/manifest/qa）必须重建或失败（D-14）。
+- **把新指标硬失败接入 `cmd_eval` 退出码而未同步测试：** 破坏 D-25 mock 契约——过程/消融指标入报表但**不**抬高退出码门槛（或同步改测试并保持仿真回归数=0）。
+- **在聚合里对 `dangling_rate is None` 直接 `float()`/`sum()`：** 会 TypeError；见 Pitfalls。
 
 ## Don't Hand-Roll
 
 | Problem | Don't Build | Use Instead | Why |
 |---------|-------------|-------------|-----|
-| Student t CI | 自建临界值表 / 正态近似 | `scipy.stats.t.interval` + `sem` | 小样本 N=3 时正态近似偏差大；D-01 |
-| 引用提取 | 新解析器 | 既有 `CITE_RX` / `extract_citations` | 已覆盖 inline+trailer |
-| 技能加载 | 重写 loader | `load_skills()` + `SkillRegistry(skills=)` | 已稳定排序与注入 |
-| 配置指纹 | 自定义 hash 框架 | `canonical_json` + sha256 扩 payload | 模式已存在 |
-| LLM 缓存 | Redis/服务 | 本地文件 blob | 本地优先 |
-| 成本计量 | 平行账本类 | 扩展 `TokenLedger` | 单一计量源 |
+| Student t 置信区间 | 手抄 t 分位表 | `scipy.stats.t.interval` + `stats.sem` | 小样本边界、ddof、数值稳定 |
+| `.env` / YAML 解析 | 自写解析器 | 已有 dotenv / PyYAML | Phase 1 已定 |
+| LLM HTTP | 自写 urllib | 已有 openai SDK | Phase 1 |
+| 磁盘 KV 缓存框架 | 自研复杂 LRU 服务 | stdlib JSON 文件 + sha256 文件名 | 单机 POC；命中率目标可用二次跑验证 |
+| 技能检索 | 消融时改 retrieve 算法 | 既有 `SkillRegistry(skills=...)` 过滤 | 构造期 mask 即可 |
 
-**Key insight:** 本阶段复杂度在「口径与聚合」，不在新基础设施——复用现有门面可把 diff 压在评测与闸门层。
-
-## Runtime State Inventory
-
-> 指纹语义迁移（非改名，但影响已落盘证据包可比性）
-
-| Category | Items Found | Action Required |
-|----------|-------------|------------------|
-| Stored data | 既有 workspace 证据包 `run.config_hash` / Merkle salt 用旧口径 | 文档记录断代；**不**批量重算历史包；新 run 自动用新 hash |
-| Live service config | 无外部服务 | None — verified（本地优先） |
-| OS-registered state | 无 | None — verified |
-| Secrets/env vars | `VELA_LLM_PROVIDER` / Ark 凭证；可选 `VELA_LLM_CACHE_DIR` | 新增 cache env 写入 `.env.example` 注释；不改密钥名 |
-| Build artifacts | `.cache/vela/`（新）；旧 duckdb 仍可用 | `.gitignore` 已覆盖 `.cache/`；reuse 依赖 QA 标记 |
+**Key insight:** 本阶段复杂度在「度量契约与聚合」，不在新算法——凡统计/IO 有成熟库或现成注入点就复用。
 
 ## Common Pitfalls
 
-### Pitfall 1: F-01 零引用悖论残留在聚合层
-**What goes wrong:** 修了属性但 `float(None)`、均值把 `None` 当 0、退出码仍只看 rate。
-**Why it happens:** runner/CLI/metrics.gauge 假定 rate 为 float。
-**How to avoid:** `dangling_citation_rate` 改为「有引用用例的平均悬空率」；另报 `zero_citation_cases` / `citation_gate_pass_rate`；`gauge` 跳过 None。
-**Warning signs:** 单测只改 citations.py、eval 绿但 CLI 崩。
+### Pitfall 1: `dangling_rate=None` 炸毁下游
 
-### Pitfall 2: F-10 / NR-6 指纹断代未建账
-**What goes wrong:** hash 变了但无映射表，历史证据包「看似同源」。
-**How to avoid:** 与代码同 PR 交付 `docs/CONFIG_HASH_HISTORY.md` 首行；单测读 prompts/skills 扰动。
-**Warning signs:** 只改 `config.py`、docs 空缺。
+**What goes wrong:** `EvalRunner` 现有 `float(...get("dangling_rate", 0.0))`；`Metrics.gauge` → `snapshot` 里 `round(v, 4)`；平均值 `sum(c.dangling_rate)`。  
+**Why:** 今日属性永为 float。  
+**How to avoid:** `CaseResult.dangling_rate: float | None`；聚合时跳过 None 或分母只计有引用用例；`Metrics.gauge` 忽略 None（改 `obs/metrics.py` 比改 graph 控制流更安全）。报表单独展示「零引用用例数」。  
+**Warning signs:** mock e2e 在零引用路径 TypeError。
 
-### Pitfall 3: NR-1 基线下降被当回归
-**What goes wrong:** 引用闸门生效后 top1 低于 44.4%，被误回滚。
-**How to avoid:** 基线报告醒目标注「仿真回归门、非能力」；回归门仍是 mock 已通过用例数=0 + 177 tests；禁止用 44.4% 对比。
-**Warning signs:** PR 描述写「准确率回退」。
+### Pitfall 2: 指纹断代未建映射表
 
-### Pitfall 4: 缓存破坏 determinism / 掩盖方差
-**What goes wrong:** determinism 测试读到脏缓存；基线误开缓存。
-**How to avoid:** 默认测试 `VELA_LLM_CACHE=0` 或 cache 仅显式开启；METR-09 强制 `--no-cache`；缓存键含 physical_model+params。
-**Warning signs:** 同输入二次 mock 结果漂移或基线方差≈0。
+**What goes wrong:** 证据包 `salt=config_hash` 旧包不可比；NR-6 失控。  
+**How to avoid:** 扩展 hash 的同一 PR 写入 `docs/CONFIG_HASH_HISTORY.md`（旧=`sha256:32d709b3…` 已测于 2026-07-31）。  
+**Warning signs:** 仅改代码无文档。
 
-### Pitfall 5: reuse 半成品库
-**What goes wrong:** 只有部分 parquet、无 QA，诊断诡异失败。
-**How to avoid:** 复用条件：`gold/analysis.duckdb` 存在 **且** `qa/qa_report.json` 中 `checks_passed is True`；否则 rebuild。
-**Warning signs:** `--reuse-workspace` 后大量 BUILD 无、诊断空库。
+### Pitfall 3: 缓存绕过预算或写入明文敏感信息
 
-### Pitfall 6: 退出码契约被新指标破坏
-**What goes wrong:** mock 黄金评测 exit 4，CI 红。
-**How to avoid:** D-25——新指标入报表但不加入 `cmd_eval` 硬退出条件，除非同步改测试且回归数仍为 0；过程/消融目标「展示但不门禁」。
-**Warning signs:** `make eval` 在 mock 下非 0。
+**What goes wrong:** 缓存在 redact 前；或命中跳过 `precheck`/`charge`。  
+**How to avoid:** 插入点固定在 redact 之后；命中仍 `precheck`+`charge`；缓存正文为已脱敏 messages。  
+**Warning signs:** audit 出现 VIN/手机号；ledger 在命中时为 0。
 
-### Pitfall 7: 过程指标引诱改 graph
-**What goes wrong:** 为让 `llm_parse_failure_rate`「真实」而改 `_parse_json`。
-**How to avoid:** 代理口径 + 报表脚注；计数器发射留给 Phase 3。
-**Warning signs:** diff 触及 `graph.py` 控制流。
+### Pitfall 4: 过程指标「不可测」却硬编码假达标
+
+**What goes wrong:** audit 默认 `log_prompt: false` 且不落 `finish_reason`，无法事后算 truncation/parse。  
+**How to avoid:** 网关允许触碰面内扩展 `Auditor.record(..., finish_reason=)`（无需落全文 prompt）；parse 失败可用 events/`plan.done` 与空 skill+非预期 stop 的**代理**，报表标注「代理/待 Phase 3」；禁止为好看填 0 却不标注。  
+**Warning signs:** 七项指标全是 0.0 且无注释。
+
+### Pitfall 5: 消融改了 `builtin.yaml` 或污染全局 SkillRegistry
+
+**What goes wrong:** 源文件被改或单例被清空。  
+**How to avoid:** 每用例新 `SkillRegistry(list)`；测后确认 `config/skills/builtin.yaml` 无 diff。  
+**Warning signs:** 消融后普通 eval skill_hit 崩溃。
+
+### Pitfall 6: METR-09 在尺子未修时抢跑
+
+**What goes wrong:** 基线仍建立在旧闸门上。  
+**How to avoid:** ROADMAP/D-18 顺序——基础设施合并并通过 mock 回归后，最后人工/显式 `realllm` 跑基线。  
+**Warning signs:** baseline JSON 的 `citation_gate_version` 缺失或仍宣称对比 44.4%。
+
+### Pitfall 7: `cmd_eval` 退出码被新指标抬高
+
+**What goes wrong:** 今日退出码看 top1/FP/dangling/illegal_skill；若把 `citation_coverage≥0.9` 或消融指标纳入硬失败，mock 黄金可能红。  
+**How to avoid:** D-03/D-16——目标线进报表；硬退出码仅在同步测试且仿真回归数仍为 0 时扩展。推荐：零引用 `ok` 反映在 per-case 字段与报表，是否纳入 exit 由 planner 显式决策并改 `test_eval`/`test_cli`。
 
 ## Code Examples
 
-### 扩展 config_hash
+### 事实句切分（Discretion 推荐钉法）
 
 ```python
-# 目标 payload 键（D-05/D-06）
-payload = canonical_json({
-    "pipeline": load_yaml("pipeline.yaml"),
-    "parsers": load_yaml("parsers.yaml"),
-    "phases": load_yaml("ota_phases.yaml"),
-    "budget": load_yaml("budget.yaml"),
-    "llm": load_yaml("llm.yaml"),
-    "skills": load_skills(),  # 或按文件原始文本哈希，须与 load_skills 同源
-    "prompts_sha256": hashlib.sha256(
-        Path(__file__).resolve().parent.joinpath("gateway/prompts.py")
-        .read_bytes()
-    ).hexdigest(),
-    "canon_rules_version": canon_rules_version(),
-    "algos": fingerprint_algos(),
-})
-# 明确不读 env_checks.yaml
+# 推荐启发式（planner 应原样钉进单测表）
+# - 按换行分段，再按 [?？!！.。] 切句
+# - 丢弃：空行、仅 markdown 标题（^#{1,6}\s）、仅空白
+# - 事实句：去空白后长度 ≥ 8 的句子（避免「是。」类噪声）[ASSUMED: 长度阈值可调]
+# citation_coverage = count(句子含 CITE_RX) / count(事实句)；分母 0 → None 或 0.0（建议 None 与 dangling 对齐）
 ```
 
-### reuse-workspace 判定
+### workspace 复用判据
 
 ```python
-def _workspace_reusable(ws: Path) -> bool:
+# 与 evidence/pipeline.py 产物对齐 [VERIFIED: codebase]
+def workspace_reusable(ws: Path) -> bool:
     db = ws / "gold" / "analysis.duckdb"
+    manifest = ws / "manifest.json"
     qa = ws / "qa" / "qa_report.json"
-    if not db.exists() or not qa.exists():
+    if not (db.is_file() and manifest.is_file() and qa.is_file()):
         return False
-    data = read_json(qa)
-    return bool(data.get("checks_passed"))
+    # 可选：读 qa_report.checks 全 ok；失败则 False → 重建
+    return True
 ```
 
-### 消融代理指标（D-17）
+### 代理消融指标（D-17）
 
 ```python
-# 报表必须标注：代理口径，Phase 5 后替换
-# misdiagnosis: ablation 下 status==answered 且 predicted 不在 {None, undetermined, no_fault_found}
-# novel_detection_recall: ablation 下「正确拒绝」=
-#   status in {unanswerable, human_gate} OR _no_fault(predicted_label)
-# confidence_calibration_error: 二元 ECE 代理
-#   conf = 1.0 if status==answered else 0.0
-#   | mean(correct) - mean(conf) |  （correct 定义与 top1/拒绝一致性对齐）
+# 报表必须标注「代理口径，Phase 5 后替换」
+# misdiagnosis_rate_under_ablation:
+#   故障用例中 predicted_label 非空且 ≠ expected 且 status==answered 的比例
+# novel_detection_recall（代理）:
+#   消融故障用例中 status ∈ {unanswerable, human_gate}
+#   或 predicted_label ∈ {None,"","undetermined","no_fault_found"} 的比例
+#   （真 novel: 前缀待 Phase 5）
+# unexplained_error_rate（代理）:
+#   经 LogQueryAPI 统计 ERROR/FATAL 行中未出现在 seen_row_hashes 的比例（会话级均值）
+# confidence_calibration_error（代理）:
+#   | 1{status==answered} - 1{top1_hit} | 在故障用例上的均值
+#   （真六级校准待 Phase 5）
 ```
 
-### TokenLedger 成本扩展
+### TokenLedger 成本归集草图
 
-```yaml
-# config/budget.yaml 新增段（示例）
-cost:
-  # 单位：USD / 1K tokens（占位，按方舟实际单价改）
-  input_per_1k: 0.0
-  output_per_1k: 0.0
-  diagnose_cost_alert: 1.0   # 单次诊断估算成本告警阈值；不替代 token 硬切断
+```python
+# config/budget.yaml 新增并列段（示例键名 Discretion）
+# cost:
+#   currency: CNY
+#   price_per_1k_prompt_tokens: 0.0    # 按方舟定价填
+#   price_per_1k_completion_tokens: 0.0
+#   diagnose_cost_alert: 1.0           # 单次诊断成本告警上限
+# charge() 后累加 estimated_cost；超限 bus.emit(..., Severity.ALERT)
+# 不 raise BudgetExceeded
 ```
-
-## File-Level Change Map
-
-| File | Change | Reqs |
-|------|--------|------|
-| `src/vela/agent/citations.py` | `dangling_rate`/`ok`/`has_citations`；`citation_coverage()` / 事实句切分；`to_dict` | METR-01/02 |
-| `src/vela/config.py` | `config_hash` 扩 payload | METR-03 |
-| `docs/CONFIG_HASH_HISTORY.md` | 新建断代表 | METR-03 |
-| `src/vela/gateway/cache.py` | **NEW** 磁盘缓存 | METR-06 |
-| `src/vela/gateway/base.py` | chat 挂缓存；可选 cache stats | METR-06 |
-| `src/vela/gateway/audit.py` | 记录 `finish_reason`（过程指标） | METR-05 |
-| `src/vela/gateway/budget.py` | 成本累计、snapshot 字段、超限 ALERT 钩子 | PERF-02 |
-| `config/budget.yaml` | `cost:` 段 | PERF-02 |
-| `src/vela/eval/stats.py` | **NEW** t-CI | METR-04 |
-| `src/vela/eval/process.py` | **NEW** 7 项聚合 + 轨迹 | METR-05 |
-| `src/vela/eval/runner.py` | reuse / ablation / 过程字段 / None-safe dangling | METR-04/05/07/08 |
-| `src/vela/eval/report.py` | `_TARGETS` 扩展；过程/消融/聚合行；代理脚注 | METR-01/05/08 |
-| `src/vela/cli.py` | `--repeat/--reuse-workspace/--no-cache/--ablation`；exit 契约审慎 | METR-04/06/07/08 |
-| `scripts/bench.py` | volcengine、成本、P95、no-cache | PERF-01 |
-| `pyproject.toml` | optional `eval`/`dev` + scipy | METR-04 |
-| `.env.example` | cache/cost 相关注释 | METR-06 |
-| `Makefile` | `baseline` / `eval-repeat` 目标（付费显式） | METR-09 |
-| `tests/test_agent.py` | total==0、coverage 边界 | METR-01/02 |
-| `tests/test_obs_and_config.py` | 四类 hash 扰动；env_checks 不变 | METR-03 |
-| `tests/test_eval.py` | repeat 聚合、reuse、ablation、过程字段 | METR-04/05/07/08 |
-| `tests/test_gateway.py` | 缓存命中、`--no-cache`、成本 snapshot | METR-06 / PERF-02 |
-| `.planning/phases/02-metrics-baseline/baseline/*` | 收尾产物（人工跑） | METR-09 / PERF-01 |
-| **禁止** `src/vela/agent/graph.py` 控制流 / prompts 语义 | — | D-24 |
 
 ## State of the Art
 
 | Old Approach | Current Approach | When Changed | Impact |
 |--------------|------------------|--------------|--------|
-| 单次评测点估计 | `--repeat N` + t-CI | Phase 2 | 行为调优可检验 |
-| dangling_rate 零引用=0.0 | None + has_citations 门 | Phase 2 | 旗舰闸门恢复意义 |
-| config_hash 窄覆盖 | skills/budget/llm/prompts | Phase 2 | 证据包可区分优化版本 |
-| 无 LLM 缓存 | 本地四元组磁盘缓存 | Phase 2 | 迭代成本可承受 |
-| 44.4% 口头基线 | `baseline/` 带 CI 报告 | Phase 2 收尾 | NR-1：旧数字退役 |
+| 零引用 `ok=True`、`dangling_rate=0.0` | `ok=False`、`dangling_rate=None`、`has_citations` | Phase 2 / METR-01-02 | 尺子变准；分数可能下降（NR-1） |
+| 单点 44.4% 无 CI | N≥3 + Student t 95% CI 基线目录 | Phase 2 / METR-09 | 后续阶段唯一对比锚 |
+| config_hash 三 YAML | +skills+budget+llm+prompts | Phase 2 / METR-03 | 指纹断代，需 HISTORY |
+| TokenLedger 仅切断 | +成本归集 + ALERT | Phase 2 / PERF-02 | G6 可回答单价问题 |
+| scipy `interval(alpha=...)` 旧参名 | `interval(confidence=...)` | SciPy 1.10+ | 新代码用 `confidence=` `[CITED: scipy docs / community]` |
 
 **Deprecated/outdated:**
-- 以 44.4% 作为 Phase 3+ 对比基线：本阶段完成后禁止。[CITED: ROADMAP NR-1 / CONTEXT D-19]
-- 将 `dangling_citation_rate=0.0` 解读为「引用质量完美」而无视 `has_citations`。[CITED: explore-docs F-01]
+
+- 将 44.4% 作为 Phase 3+ 对比基线（D-19 / NR-1）。
+- 手写 t 区间或「依赖最小化故不用 scipy」（已被 Phase 1 D-01 废止）。
 
 ## Assumptions Log
 
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
-| A1 | 缓存命中仍应对 TokenLedger charge（用缓存内 token 数） | Pattern 2 | 成本口径与「API 账单」不一致；可改为分字段 |
-| A2 | `llm_parse_failure_rate` 用 plan.done 空技能代理足够「可测」 | Gaps | Phase 3 前指标偏噪；已要求脚注 |
-| A3 | 方舟单价占位 0.0，基线以 token 为主、金额为辅直到填实 | PERF-02 | 金额基线无意义；token/P95 仍可用 |
-| A4 | 健康场景在 `--ablation` 下跳过 mask（无 expected_skills） | METR-08 | 分母定义需报表写清 |
+| A1 | 事实句最小长度阈值 8 字符合适 | Code Examples | coverage 数值偏移；须单测表可调 |
+| A2 | 标准库 JSON 文件缓存足以达 >90% 命中率 | Standard Stack | 若不足可再引入 diskcache |
+| A3 | 代理 novel/calibration 公式可被验收方接受为「可测」 | Ablation proxies | 需在报表显著标注 |
+| A4 | `obs/metrics.py` 容忍 None 不算违反 D-24 | Pitfalls | 若严格禁止，则仅改 eval 聚合并避免 gauge(None) |
+| A5 | 方舟单价由用户填入 budget.yaml，研究不锁具体数字 | PERF-02 | 基线成本绝对值依赖配置 |
 
-**若需用户确认：** A1（缓存是否计量）影响 PERF 数字解读；其余为可脚注代理。
+**若表空则无需确认——本表非空：A1–A3 建议 planner 在任务中写死并单测，无需再开 discuss。**
 
 ## Open Questions
 
-1. **缓存命中是否计入 session token / 成本？**
-   - What we know: D-12/D-13 要求不改业务语义、可关缓存；未钉死计量。
-   - Recommendation: 命中仍 charge + 增加 `cache_hits` 计数；基线 `--no-cache` 不受影响。
+1. **`cmd_eval` 是否因 `has_citations==False` 直接非零退出？**
+   - What we know: METR-01 要求质量闸门失败；今日 exit 看聚合 dangling_rate 等。
+   - What's unclear: per-case 失败 vs 全局阈值。
+   - Recommendation: 报表+`cases[].citation_ok` 必达；全局 exit 增加「零引用用例数==0」或保持仅报表——**优先**把 `citation_ok` 纳入与 dangling 同级的聚合失败条件，并同步测试（仍保仿真回归数=0）。
 
-2. **`cmd_eval` 退出码是否纳入 `has_citations`？**
-   - What we know: D-25 要求不破坏 mock 契约。
-   - Recommendation: mock reporter 通常有引用 → 可加 `citation_gate_pass_rate==1` 到 exit；若 mock 偶发零引用则仅报表告警、exit 仍用原四条件。实现前用现有 mock 黄金跑一次确认。
+2. **scipy 放 optional 还是 required？**
+   - Recommendation: **optional `dev`/`all`**；`--repeat` 缺依赖时 CLI 清晰报错。不破坏离线 diagnose。
 
-3. **scipy 放必需还是可选？**
-   - Recommendation: optional `[eval]`/`dev`；CI `make test` 若测 CI 函数则 dev 安装须含 scipy（`make install-dev` 已装 dev）。
+3. **过程指标 `llm_parse_failure_rate` 在无 completion 落盘时如何取值？**
+   - Recommendation: 网关不强制 `log_prompt=true`；parse 代理 = planner 输出无法形成合法动作且 events 可见的比例，或 Phase 2 报表显示 `null` + 注释「待 ORCH-03 埋点」。可测性优先于假精度。
 
 ## Environment Availability
 
 | Dependency | Required By | Available | Version | Fallback |
 |------------|------------|-----------|---------|----------|
-| Python | 全阶段 | ✓ | 3.12.13 | — |
-| scipy | METR-04 CI | ✓（研究机已装 1.18.0） | 1.18.0 | 可选依赖；缺则 `--repeat` 报错 |
-| numpy | scipy | ✓ | 2.4.6+ / PyPI 2.5.1 | 随 scipy |
-| 火山引擎凭据 | METR-09/PERF-01 | 视 `.env` | — | 人工门；无凭据则跳过收尾、基础设施仍可验收 |
-| DuckDB workspace | reuse/eval | ✓ 本地样例存在 | — | 无则 build |
+| Python | 全阶段 | ✓ | 3.12.13（.venv） | — |
+| 项目 .venv + 主依赖 | mock 评测 | ✓ | 见 pyproject | `make install-dev` |
+| scipy / numpy | METR-04 CI | ✗（.venv 内未装；系统 site-packages 有 1.18.0/2.4.6） | 装入 .venv | 明确报错；禁止静默手写 |
+| volcengine 凭证 / `.env` | METR-09 / PERF-01 | ✓（Phase 1 已通） | — | 无凭证则跳过付费门，标 blocked |
+| `data/dataset` 黄金集 | eval/baseline | 视本地 | — | `make sim` |
+| 磁盘 `.cache/` | METR-06 | ✓（gitignore 已有 `.cache/`） | — | — |
+| graphify | 研究增强 | ✗ disabled | — | 未用图；纯代码研究 |
 
-**Missing dependencies with no fallback:**
-- 无（真实基线缺凭据时降级为「基础设施验收通过、基线产物人工补跑」）
+**Missing dependencies with no fallback:** 无（scipy 可装；真实 LLM 仅收尾行需要）。  
 
-**Missing dependencies with fallback:**
-- scipy → 声明为 `[eval]` 可选；单测在未安装时 skip CI 专用用例（或 install-dev 纳入）
-
-Step 2.6: 外部依赖已审计（本地 Python 栈 + 可选付费 LLM）。
+**Missing dependencies with fallback:** scipy 未进 .venv → 计划 Wave 含安装；无 volcengine → METR-09 人工门挂起但 mock METR-01~08 可完成。
 
 ## Validation Architecture
 
-> `workflow.nyquist_validation` 未在 `.planning/config.json` 显式关闭 → 启用。
+> `workflow.nyquist_validation` 未在 `.planning/config.json` 设为 false → **启用**。
 
 ### Test Framework
 
 | Property | Value |
 |----------|-------|
 | Framework | pytest ≥8.0 |
-| Config file | `pyproject.toml` → `[tool.pytest.ini_options]` |
+| Config file | `pyproject.toml` → `[tool.pytest.ini_options]`（`addopts = "-q --strict-markers -m 'not realllm'"`） |
 | Quick run command | `make test-fast` |
 | Full suite command | `make test` |
 
@@ -646,85 +506,113 @@ Step 2.6: 外部依赖已审计（本地 Python 栈 + 可选付费 LLM）。
 
 | Req ID | Behavior | Test Type | Automated Command | File Exists? |
 |--------|----------|-----------|-------------------|-------------|
-| METR-01 | 零引用 `ok is False`；coverage 计算 | unit | `pytest tests/test_agent.py -k citation -q` | ✅ 扩展 |
-| METR-02 | `total==0` → `dangling_rate is None` | unit | `pytest tests/test_agent.py -k 'zero_citation or total' -q` | ❌ Wave 0 |
-| METR-03 | 四类扰动 hash 变；env_checks 不变 | unit | `pytest tests/test_obs_and_config.py -k config_hash -q` | ✅ 扩展 |
-| METR-04 | repeat 聚合含 ci95 | unit | `pytest tests/test_eval.py -k repeat -q` | ❌ Wave 0 |
-| METR-05 | metrics 含 7 过程键 + 轨迹 | unit | `pytest tests/test_eval.py -k process -q` | ❌ Wave 0 |
-| METR-06 | 同键二次 chat 命中；no-cache 不写 | unit | `pytest tests/test_gateway.py -k cache -q` | ❌ Wave 0 |
-| METR-07 | reuse 跳过 build；坏 QA 重建 | unit | `pytest tests/test_eval.py -k reuse -q` | ❌ Wave 0 |
-| METR-08 | ablation mask + 四指标键存在 | unit | `pytest tests/test_eval.py -k ablation -q` | ❌ Wave 0 |
-| METR-09 | 方差基线产物格式 | manual / realllm | `pytest -m realllm` 或 `make baseline` | ❌ 人工门 |
-| PERF-01 | bench JSON 含 cost + p95 | unit/smoke mock | `pytest tests/test_cli_and_server.py -k bench` 或脚本 mock | ❌ Wave 0 |
-| PERF-02 | ledger snapshot 含 estimated_cost；超限 emit | unit | `pytest tests/test_gateway.py -k cost -q` | ❌ Wave 0 |
+| METR-01 | 零引用 → `ok is False`；coverage 入 metrics | unit | `pytest tests/test_agent.py -k citation -q` + `tests/test_eval.py -k coverage` | ⚠️ 需扩展（现有 citation 测未钉零引用失败） |
+| METR-02 | `total==0` → `dangling_rate is None`；`has_citations` | unit | `pytest tests/test_agent.py -k 'dangling or has_citations or zero' -q` | ❌ Wave 0 |
+| METR-03 | 四类输入改变 hash；env_checks 不改变 | unit | `pytest tests/test_obs_and_config.py -k config_hash -q` | ⚠️ 仅有确定性测，缺四类变异 |
+| METR-04 | `--repeat 3` 产出 mean/std/ci95 | unit/integration | `pytest tests/test_eval.py -k repeat -q` | ❌ Wave 0 |
+| METR-05 | 7 指标键存在于 report/metrics | unit | `pytest tests/test_eval.py -k process_metric -q` | ❌ Wave 0 |
+| METR-06 | 同 key 二次 chat 命中；`--no-cache` 不写 | unit | `pytest tests/test_gateway.py -k cache -q` | ❌ Wave 0 |
+| METR-07 | 有完整 ws 时不调用 rebuild（可通过计时/标记） | integration | `pytest tests/test_eval.py -k reuse -q` | ❌ Wave 0 |
+| METR-08 | `--ablation` 产出四指标键；不改 skills 文件 | integration | `pytest tests/test_eval.py -k ablation -q` | ❌ Wave 0 |
+| METR-09 | 基线文件 schema；realllm 排除 | unit + manual/realllm | `pytest -m realllm`（显式）+ 检查 `baseline/` | ❌ Wave 0（付费人工门） |
+| PERF-01 | bench JSON 含 cost + p95 | unit/script | `pytest` 抽测 bench 聚合函数或 dry-run mock | ❌ Wave 0 |
+| PERF-02 | ledger snapshot 含 cost；超限 ALERT | unit | `pytest tests/test_gateway.py -k ledger_cost -q` | ❌ Wave 0 |
+| D-25 | 全量回归 | suite | `make test` | ✅ |
 
 ### Sampling Rate
 
-- **Per task commit:** `make test-fast` + 相关单文件 pytest
-- **Per wave merge:** `make test`
-- **Phase gate:** `make test` 绿 + mock 黄金回归数 0；METR-09/PERF-01 人工基线落盘
+- **Per task commit:** `make test-fast` + 相关单文件 pytest  
+- **Per wave merge:** `make test`  
+- **Phase gate:** `make test` 绿 +（人工）METR-09 baseline 落盘 + 仿真回归数=0  
 
 ### Wave 0 Gaps
 
-- [ ] `tests/test_agent.py` — `test_zero_citation_report_fails_quality_gate`；`test_citation_coverage_*` 边界表
-- [ ] `tests/test_obs_and_config.py` — skills/budget/llm/prompts 扰动；env_checks 负例
-- [ ] `tests/test_eval.py` — repeat/reuse/ablation/process 报表键
-- [ ] `tests/test_gateway.py` — cache 命中率、cost alert、finish_reason 审计
-- [ ] `make install-dev` 确保 scipy 在 dev extra（若 CI 跑 stats 单测）
-- [ ] 基线目录占位 README（可选）：说明须 `--no-cache` + volcengine
+- [ ] `tests/test_agent.py` — 零引用 `ok is False`、`dangling_rate is None`、`has_citations`（METR-01/02）
+- [ ] `tests/test_obs_and_config.py` — skills/budget/llm/prompts 变异改 hash；env_checks 不变（METR-03）
+- [ ] `tests/test_eval.py` — repeat 聚合、process metrics 键、coverage、reuse-workspace、ablation 代理指标（METR-04/05/07/08）
+- [ ] `tests/test_gateway.py` — 磁盘缓存命中/旁路、finish_reason 审计字段、TokenLedger 成本与 ALERT（METR-06/PERF-02）
+- [ ] `docs/CONFIG_HASH_HISTORY.md` — 非测试但与 NR-6 验收绑定
+- [ ] `.venv` 安装 `scipy`（dev 依赖）— Wave 0 或 Plan 01 首任务
+- [ ] （可选）`tests/test_eval_stats.py` — 若不想膨胀 test_eval，可新建平面文件；TESTING.md 倾向并入 `test_eval.py`
 
 ## Security Domain
 
 ### Applicable ASVS Categories
 
 | ASVS Category | Applies | Standard Control |
-|---------------|---------|-----------------|
+|---------------|---------|------------------|
 | V2 Authentication | no（本地 CLI） | — |
 | V3 Session Management | no | — |
-| V4 Access Control | partial | 租户谓词既有；本阶段不改 |
-| V5 Input Validation | yes | 缓存键/params 规范化；eval CLI 参数校验 N≥2 |
-| V6 Cryptography | yes（hash） | sha256 via stdlib；不手写哈希算法 |
-| V7 Error Handling | yes | 缓存损坏 → miss 重建；QA 失败不 silent reuse |
-| V8 Data Protection | yes | 缓存仅存脱敏后流量；`.cache/` gitignore；禁止提交 `.env` |
+| V4 Access Control | no | — |
+| V5 Input Validation | yes | 缓存键/params 经 `canonical_json`；路径限制在 `.cache/vela/llm/`；workspace 路径不穿越 |
+| V6 Cryptography | yes（哈希非加密） | `hashlib.sha256` 做 cache key / config_hash；不手写哈希算法 |
+| V7 Error Handling | yes | 缓存损坏 → 视为未命中并重建；reuse 失败显式重建/报错 |
+| V8 Data Protection | yes | 仅缓存 **redact 后** 内容；禁止把 `.env` 写入 baseline；baseline 可含 config_hash/provider，不含 API key |
 
-### Known Threat Patterns for this phase
+### Known Threat Patterns for this stack
 
 | Pattern | STRIDE | Standard Mitigation |
 |---------|--------|---------------------|
-| 缓存未脱敏日志片段 | Information Disclosure | 缓存点必须在 `Redactor.redact` 之后 |
-| 缓存投毒（篡改 blob） | Tampering | 键绑定 prompt_sha256；损坏 JSON → miss；不信任缓存改业务分支 |
-| 预算绕过（缓存跳过 charge） | Elevation of Privilege（配额） | 命中仍 charge 或显式分字段审计 |
-| 指纹遗漏导致证据包不可审计 | Repudiation | D-05 扩覆盖 + HISTORY 表 |
-| 付费基线误入 CI | — | `realllm` addopts 排除；Makefile 显式目标 |
+| 缓存投毒/污染导致错误诊断 | Tampering | 键含 prompt_sha256+params+model；`--no-cache` 基线；损坏 JSON 丢弃 |
+| 敏感日志进缓存 | Information Disclosure | 挂载点在 `Redactor.redact` 之后 |
+| 成本告警被当成切断绕过 | Elevation/Denial | ALERT ≠ `BudgetExceeded`；硬切断阈值独立 |
+| 评测路径 SQL 注入扫 ERROR | Tampering | 只经 `LogQueryAPI` |
+| 基线报告被当作对外准确率 | Spoofing（流程） | 文件头强制「仿真回归门，非 G4 能力宣称」 |
+
+## Recommended Implementation Order (for planner)
+
+1. **Wave A — 闸门与指纹：** METR-01/02/03 + HISTORY.md + 兼容 None 的 eval/metrics  
+2. **Wave B — 评测基础设施：** METR-04 stats、METR-05 过程指标、METR-06 缓存、METR-07 reuse、METR-08 ablation、PERF-02 ledger  
+3. **Wave C — 真实基线（收尾）：** METR-09 + PERF-01 → 写 `baseline/`；Makefile/`realllm` 门；文档废止 44.4% 对比  
 
 ## Sources
 
 ### Primary (HIGH confidence)
 
-- 代码库：`citations.py` / `config.py` / `eval/*` / `gateway/*` / `cli.py` / `scripts/bench.py` / `budget.yaml` — 2026-07-31 实读
-- Context7 `/websites/scipy_doc_scipy` — `stats.t.interval` / `sem` / Student t CI
-- `.planning/phases/02-metrics-baseline/02-CONTEXT.md` — 锁定决策 D-01..D-26
-- `.planning/ROADMAP.md` Phase 2 / `.planning/REQUIREMENTS.md` METR/PERF
-- `explore-docs/VELA-多专家联合评审与系统性优化改造方案.md` — F-01/F-02/F-10/NR-1/NR-6/C-01..C-14
-- `AGENTS.md` / `.planning/codebase/TESTING.md` — 测试与架构铁律
-- slopcheck + `pip index versions` — scipy/numpy
+- Context7 `/websites/scipy_doc_scipy`、`/scipy/scipy` — `t.interval` / `ttest_1samp.confidence_interval` / sem 用法  
+- 本仓库源码：`citations.py`、`config.py::config_hash`、`eval/{runner,report,golden}.py`、`cli.py::cmd_eval`、`gateway/{base,budget,audit}.py`、`scripts/bench.py`、`evidence/pipeline.py`（reuse 判据）、`agent/{graph,skills,state}.py`（注入点与事件）  
+- `.planning/phases/02-metrics-baseline/02-CONTEXT.md` D-01..D-26  
+- `.planning/REQUIREMENTS.md` METR/PERF；`.planning/ROADMAP.md` Phase 2  
+- `pip index versions` + `slopcheck install scipy numpy` → [OK]  
+- 本机实测：`stats.t.interval(0.95, ...)` 返回合理区间；当前 `config_hash=sha256:32d709b34dfebf66…`  
 
 ### Secondary (MEDIUM confidence)
 
-- `explore-docs/VELA-真实LLM准确率归因分析与优化方案.md` §4.5 — 过程指标清单
-- `explore-docs/VELA-技能知识库深度分析报告.md` §3.4 — 消融四指标
+- explore-docs 过程指标与消融定义（RCA §4.5、KB §3.4）— 与 REQUIREMENTS 七项略有出入时以 REQUIREMENTS/CONTEXT 为准  
+- 社区 SciPy CI 教程（参数名 `confidence` vs 旧 `alpha`）— 以本机 1.18 API 为准  
 
 ### Tertiary (LOW confidence)
 
-- 方舟具体 token 单价（须运维填入 `budget.yaml`，研究时未验证账单）— [ASSUMED] A3
+- 事实句长度阈值、代理指标精确阈值 — `[ASSUMED]`，见 Assumptions Log  
 
 ## Metadata
 
 **Confidence breakdown:**
-- Standard stack: HIGH — 复用现有栈 + scipy 经 PyPI/slopcheck/Context7
-- Architecture: HIGH — 触碰面由 CONTEXT D-24 钉死，代码锚点已核对
-- Pitfalls: HIGH — F-01/F-10/NR-1 来自探索文档并与代码行为吻合
-- 代理指标数学细节: MEDIUM — 可测但 Phase 5 前非最终口径（已脚注）
 
-**Research date:** 2026-07-31
-**Valid until:** 2026-08-30（栈稳定；方舟单价/API 变更时重验 PERF 配置）
+- Standard stack: **HIGH** — PyPI + slopcheck + Context7 + 本机调用  
+- Architecture: **HIGH** — 锚点文件已读；消融/缓存/reuse 注入点已核实  
+- Pitfalls: **HIGH** — None 传播、audit 缺 finish_reason、退出码契约均来自代码实证  
+- 代理指标公式: **MEDIUM** — 锁定「要代理」但具体式由 Discretion/研究推荐  
+
+**Research date:** 2026-07-31  
+**Valid until:** 2026-08-30（栈稳定；scipy 小版本浮动可忽略）
+
+---
+
+## RESEARCH COMPLETE
+
+**Phase:** 02 - metrics-baseline  
+**Confidence:** HIGH  
+
+### Key Findings
+
+1. 零引用今日 `ok=True`/`dangling_rate=0.0`——METR-01/02 必改；`None` 会炸 `EvalRunner.float()` 与 `Metrics.snapshot.round`，须同步兼容。  
+2. `config_hash` 仅三 YAML；扩展 skills/budget/llm/prompts 并新建 `docs/CONFIG_HASH_HISTORY.md`（旧 hash 已测：`sha256:32d709b3…`）。  
+3. 消融无需改 graph/YAML：用 `AgentGraph(skills=SkillRegistry(filtered))`；novel/calibration 用二元代理并标注。  
+4. 缓存挂 `LLMGateway.chat` 脱敏后；stdlib JSON 文件即可；`Auditor` 需补 `finish_reason` 才能测 truncation。  
+5. `--reuse-workspace` 判据：`gold/analysis.duckdb` + `manifest.json` + `qa/qa_report.json`。  
+6. CI：`scipy.stats.t.interval(0.95, df=n-1, loc=mean, scale=sem)`；scipy 进 optional dev，`.venv` 需安装。  
+7. 顺序铁律：METR-01~08+PERF-02 → 最后 METR-09/PERF-01 写 `baseline/`，废止 44.4%。  
+8. D-24：禁止改推理；允许 citations/config_hash/eval/cli/gateway cache/TokenLedger/bench。  
+9. 回归门：`make test` + 仿真回归数 0；新指标慎入 exit code。  
+10. 无 `.cursor/rules`；遵循 AGENTS.md + TESTING.md（无 unittest.mock）。
