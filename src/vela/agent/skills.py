@@ -4,8 +4,9 @@
                  生产可替换为 Ark /embeddings + 向量库，接口不变（see retrieve()）。
 第二段（精遴选）：把候选技能的"紧凑表示"（标题 + 触发条件 + 摘要）交给模型择一。
 
-关键点：被判定为"已用且未产出有效新证据"的技能在第一段之后即被程序物理剔除，
+关键点：被判定为 unproductive（未产出有效新证据）的技能在第一段之后即被程序物理剔除，
 不进入模型上下文——因此模型在结构上不可能重复选中它，而不是"被提示不要选"。
+已用但 productive 的技能可在不同探针 args 下复用；同 args 由 executed_probes 去重。
 """
 from __future__ import annotations
 

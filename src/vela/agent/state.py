@@ -39,6 +39,7 @@ class SessionState:
     seen_row_hashes: list[str] = field(default_factory=list)
     used_skills: list[str] = field(default_factory=list)
     unproductive_skills: list[str] = field(default_factory=list)
+    executed_probes: list[str] = field(default_factory=list)  # "{skill_id}:{args_hash}"
     tools_used: list[str] = field(default_factory=list)
     rounds: list[RoundRecord] = field(default_factory=list)
     evidence_pool: list[dict] = field(default_factory=list)
@@ -65,12 +66,12 @@ class SessionState:
     def excluded_skills(self) -> list[str]:
         """程序化历史规避：从候选集中物理剔除，而不是"提示模型别选"。
 
-        剔除范围 = 已执行过探针的技能 ∪ 未产出有效新证据的技能。
-        探针是确定性的，同一技能重跑必然返回同一批行、产出 0 条新证据——
-        实测这会白白烧掉一轮预算，因此已用即剔除；unproductive_skills 仍单独保留，
-        作为"该假设已被证据否定"的可观测指标。
+        剔除范围 = 未产出有效新证据的技能（unproductive-only）。
+        已用技能允许在不同探针 args 下复用；同 (skill_id, args) 由 executed_probes 去重，
+        避免确定性探针重跑浪费预算。unproductive_skills 仍是"该假设已被证据否定"的
+        可观测指标。
         """
-        return sorted(set(self.used_skills) | set(self.unproductive_skills))
+        return sorted(set(self.unproductive_skills))
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)

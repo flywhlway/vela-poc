@@ -14,6 +14,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import time
@@ -36,6 +37,7 @@ from vela.obs.events import EventBus, Severity
 from vela.obs.metrics import Metrics
 from vela.query.api import LogQueryAPI
 from vela.util.ids import new_session_id
+from vela.util.jsonl import canonical_json
 from vela.util.timeutil import iso
 
 UTC = timezone.utc
@@ -46,6 +48,17 @@ BIRDSEYE_PROBES = [
     {"tool": "top_templates", "args": {"sort": "error_only", "limit": 25}},
     {"tool": "find_gaps", "args": {"min_gap_seconds": 20, "limit": 10}},
 ]
+
+
+def _args_hash(args: dict) -> str:
+    """探针 args 指纹：blake2b(canonical_json(args), digest_size=8).hexdigest()。"""
+    return hashlib.blake2b(
+        canonical_json(args or {}).encode("utf-8"), digest_size=8
+    ).hexdigest()
+
+
+def _probe_key(skill_id: str, args: dict) -> str:
+    return f"{skill_id}:{_args_hash(args)}"
 
 
 def _parse_json(text: str) -> dict:
@@ -174,6 +187,11 @@ class AgentGraph:
             out["reason"] = f"模型选择了已被程序剔除的技能 {sid}（历史规避约束）"
             sid = None
         actions = out.get("actions") or (self.skills.probes_of(sid) if sid else [])
+        # ORCH-07：同 (skill_id, args_hash) 探针去重，避免确定性重跑烧预算
+        if sid and actions:
+            seen = set(st.executed_probes)
+            actions = [a for a in actions
+                       if _probe_key(sid, a.get("args") or {}) not in seen]
         if sid:
             st.used_skills = sorted(set(st.used_skills + [sid]))
         self.bus.emit("plan.done", Severity.MILESTONE, st.round_no, skill=sid,
@@ -182,7 +200,8 @@ class AgentGraph:
                 "thought": out.get("thought", ""), "reason": out.get("reason", ""),
                 "calls": calls, "rows": rows}
 
-    def node_retrieve(self, st: SessionState, actions: list[dict]) -> dict:
+    def node_retrieve(self, st: SessionState, actions: list[dict],
+                      skill_id: str | None = None) -> dict:
         rows: list[dict] = []
         calls: list[dict] = []
         notes: list[str] = []
@@ -199,6 +218,10 @@ class AgentGraph:
             notes.extend(res.notes)
             if tool not in st.tools_used:
                 st.tools_used.append(tool)
+            if res.ok and skill_id:
+                key = _probe_key(skill_id, args)
+                if key not in st.executed_probes:
+                    st.executed_probes.append(key)
             if res.ok and res.rows and tool in ("search_logs", "get_lines", "get_context"):
                 rows.extend(res.rows)
             elif res.ok and res.rows:
@@ -352,7 +375,7 @@ class AgentGraph:
                             st, plan.get("reason") or "编排器判定无可用假设，且尚未获得任何证据。")
                     break
 
-                got = self.node_retrieve(st, plan["actions"])
+                got = self.node_retrieve(st, plan["actions"], plan.get("skill"))
                 rec.tool_calls.extend(got["calls"])
                 rec.notes = got["notes"]
                 comp = self.node_compress(st, got["rows"])
