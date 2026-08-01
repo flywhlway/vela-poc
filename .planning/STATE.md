@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: 真实 LLM 生产级可信化与双驱动架构升级
 status: executing
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-08-01T06:02:01.648Z"
+stopped_at: Completed 03-03-PLAN.md
+last_updated: "2026-08-01T06:07:38.595Z"
 last_activity: 2026-08-01
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 21
-  completed_plans: 16
+  completed_plans: 17
   percent: 33
 ---
 
@@ -19,12 +19,12 @@ progress:
 ## Current Position
 
 Phase: 3
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
 Last activity: 2026-08-01
 Total Plans in Phase: 7
 
-**Progress:** [████████░░] 76%
+**Progress:** [████████░░] 81%
 
 ## Performance Metrics
 
@@ -40,6 +40,7 @@ Total Plans in Phase: 7
 | Phase 01 P08 | continuation | 2 tasks | 8 files |
 | Phase 03 P01 | 4min | 2 tasks | 3 files |
 | Phase 03 P02 | 3min | 2 tasks | 4 files |
+| Phase 03 P03 | 4min | 2 tasks | 6 files |
 
 ## Decisions
 
@@ -67,9 +68,12 @@ Total Plans in Phase: 7
 - [Phase 03]: ORCH 需求勾选留给实现 plan；03-01 仅建立采样连续性（03-01）
 - [Phase 03]: 空 dict 视为解析失败并重试；跨段 find/rfind 分支删除（03-02）
 - [Phase 03]: truncation 观测落在 AgentGraph._llm；单测用 object.__new__ 避免 test-fast 拉 built（03-02）
+- [Phase 03]: 词面命中作为有效候选分；稠密噪声不算（ORCH-10 全零分判据）
+- [Phase 03]: A1：全零分 AND ERROR 才注入 GENERIC；健康包不注入（03-03）
+- [Phase 03]: 探针去重键={skill_id}:blake2b(canonical_json(args),8)（ORCH-07）
 
 ## Session
 
-Last session: 2026-08-01T06:02:01.643Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-08-01T06:07:38.589Z
+Stopped at: Completed 03-03-PLAN.md
 Resume file: None
