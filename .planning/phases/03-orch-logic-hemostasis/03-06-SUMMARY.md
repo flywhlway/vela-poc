@@ -76,7 +76,7 @@ completed: 2026-08-01
 3. **Task 2 RED: sweep / process metrics 契约** - `0a729c6` (test)
 4. **Task 2 GREEN: ORCH-09 哨兵与真实事件口径** - `05207d3` (feat)
 
-**Plan metadata:** _(pending docs commit)_
+**Plan metadata:** `3b4df99` (docs: complete plan)
 
 ## Files Created/Modified
 
