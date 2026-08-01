@@ -63,9 +63,11 @@ agent:
 demo:
 	$(PYTHON) scripts/demo_end_to_end.py $(if $(SCENARIO),--scenario $(SCENARIO),)
 
+# 回归门必须强制 mock：.env 常设 VELA_LLM_PROVIDER=volcengine，省略 --provider 会误走付费 API
 eval: sim
 	PYTHONPATH=src VELA_CONFIG_DIR=config $(PYTHON) -m vela.cli eval run \
-		--dataset $(DATASET_DIR) --workspace $(WORKSPACE)/eval --out $(WORKSPACE)/eval/report
+		--dataset $(DATASET_DIR) --workspace $(WORKSPACE)/eval --out $(WORKSPACE)/eval/report \
+		--provider mock
 
 # mock 重复评测冒烟（N=2，可复用 workspace；不触发付费）
 eval-repeat: sim
