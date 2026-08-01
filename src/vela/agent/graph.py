@@ -25,7 +25,7 @@ from pathlib import Path
 from vela.agent.checkpoint import CheckpointStore
 from vela.agent.citations import strip_dangling, verify_citations
 from vela.agent.compress import EvidenceCompressor
-from vela.agent.skills import SkillRegistry
+from vela.agent.skills import FALLBACK_SKILL_ID, SkillRegistry
 from vela.agent.state import RoundRecord, SessionState
 from vela.config import load_budget, load_yaml
 from vela.gateway import LLMRequest, build_gateway
@@ -59,6 +59,22 @@ def _args_hash(args: dict) -> str:
 
 def _probe_key(skill_id: str, args: dict) -> str:
     return f"{skill_id}:{_args_hash(args)}"
+
+
+def _has_error_signal(st: SessionState) -> bool:
+    """A1：会话/鸟瞰是否存在 ERROR 级信号（健康特异性保护）。"""
+    for r in st.evidence_pool:
+        if str(r.get("level_norm") or "").upper() in ("ERROR", "FATAL"):
+            return True
+    levels = st.signals.get("levels") or {}
+    if isinstance(levels, dict):
+        for k, v in levels.items():
+            if str(k).upper() in ("ERROR", "FATAL") and v:
+                return True
+    if st.signals.get("abort_reason") or st.signals.get("abort_marker"):
+        return True
+    return False
+
 
 
 def _parse_json(text: str) -> dict:
@@ -169,24 +185,32 @@ class AgentGraph:
             self.bus.emit("birdseye.done", Severity.MILESTONE, st.round_no,
                           signals=st.signals)
 
-        cands = self.skills.retrieve(_retrieval_query(st), top_n=8,
-                                     exclude=st.excluded_skills())
+        query = _retrieval_query(st)
+        excluded = st.excluded_skills()
+        cands = self.skills.retrieve(query, top_n=8, exclude=excluded)
         self.metrics.gauge("skills.candidates", len(cands))
         payload = {"round": st.round_no, "question": st.question, "signals": st.signals,
                    "evidence_digest": st.evidence_digest[:40],
-                   "candidate_skills": cands, "excluded_skills": st.excluded_skills(),
+                   "candidate_skills": cands, "excluded_skills": excluded,
                    "used_skills": st.used_skills,
                    "budget": self.ledger.snapshot()}
         out = self._llm_json("planner", PLANNER_SYSTEM, planner_user(payload))
         sid = out.get("selected_skill")
         # 程序化兜底：模型若选中已被剔除的技能，直接判非法并转不可答
-        if sid and sid in set(st.excluded_skills()):
+        if sid and sid in set(excluded):
             self.bus.emit("plan.illegal_skill", Severity.ALERT, st.round_no, skill=sid)
             self.metrics.inc("plan.illegal_skill")
             out["stop"] = True
             out["reason"] = f"模型选择了已被程序剔除的技能 {sid}（历史规避约束）"
             sid = None
         actions = out.get("actions") or (self.skills.probes_of(sid) if sid else [])
+        # ORCH-10 A1：候选词面全零分 AND 存在 ERROR 信号 → 注入 GENERIC（健康包不注入）
+        all_zero = not self.skills.has_positive_lexical_score(query, exclude=excluded)
+        if all_zero and _has_error_signal(st):
+            sid = FALLBACK_SKILL_ID
+            actions = list(self.skills.probes_of(sid))
+            out["stop"] = False
+            out["reason"] = out.get("reason") or "候选全零分且存在 ERROR 信号，注入通用取证技能"
         # ORCH-07：同 (skill_id, args_hash) 探针去重，避免确定性重跑烧预算
         if sid and actions:
             seen = set(st.executed_probes)

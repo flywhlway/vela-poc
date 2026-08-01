@@ -57,11 +57,18 @@ def compact(sk: dict) -> dict:
             "probes": sk.get("probes", [])}
 
 
+FALLBACK_SKILL_ID = "SK-GENERIC-EVIDENCE-FIRST"
+
+
 class SkillRegistry:
     def __init__(self, skills: list[dict] | None = None):
         self.skills = skills if skills is not None else load_skills()
         self.by_id = {s["id"]: s for s in self.skills}
         self._vec = {s["id"]: embed_local(skill_text(s)) for s in self.skills}
+
+    @staticmethod
+    def fallback_skill_id() -> str:
+        return FALLBACK_SKILL_ID
 
     def retrieve(self, query: str, top_n: int = 8, exclude: list[str] | None = None) -> list[dict]:
         """混合宽召回 → 程序化剔除 → 紧凑候选（顺序稳定：分数降序，同分按 id 升序）。
@@ -69,9 +76,13 @@ class SkillRegistry:
         单纯依赖稠密向量在短查询上召回不稳（实测会漏掉 SK-ECU-SILENT / SK-DEP-VER 这类
         与查询词面高度重合、但哈希向量夹角不占优的技能）。因此与词面命中做并集召回——
         这也是生产上 BM25 + 向量的标准做法，替换为 Ark /embeddings 时接口不变。
+
+        fallback_only 技能（如 SK-GENERIC-EVIDENCE-FIRST）永不进入常规召回池，
+        仅由编排层在全零分 + ERROR 信号时注入。
         """
         ex = set(exclude or [])
-        pool = [s for s in self.skills if s["id"] not in ex]
+        pool = [s for s in self.skills
+                if s["id"] not in ex and not s.get("fallback_only")]
         if not pool:
             return []
         qv = embed_local(query)
@@ -99,6 +110,22 @@ class SkillRegistry:
             if len(picked) >= top_n:
                 break
         return [compact(self.by_id[sid]) for sid in picked[:top_n]]
+
+    def has_positive_lexical_score(self, query: str, exclude: list[str] | None = None) -> bool:
+        """词面命中是否存在有效候选分（稠密噪声不算）。空查询 ⇒ False（全零）。"""
+        ex = set(exclude or [])
+        qtoks = set(_tokens(query))
+        if not qtoks:
+            return False
+        for s in self.skills:
+            if s["id"] in ex or s.get("fallback_only"):
+                continue
+            kt = set()
+            for k in list(s.get("keywords", [])) + [s.get("title", ""), s.get("trigger", "")]:
+                kt |= set(_tokens(str(k)))
+            if qtoks & kt:
+                return True
+        return False
 
     def probes_of(self, skill_id: str) -> list[dict]:
         return list((self.by_id.get(skill_id) or {}).get("probes", []))

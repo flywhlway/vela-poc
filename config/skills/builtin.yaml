@@ -161,3 +161,20 @@ skills:
   probes:
     - {tool: search_logs, args: {query: "disconnect reconnect mqtt tls signal 链路", components: [tbox_comm], limit: 100}}
   keywords: [tbox, 链路, mqtt, tls, 断连, disconnect, 信号, rsrp, 4g, 5g]
+
+# ORCH-10：仅全零分且存在 ERROR 信号时由编排层注入；空 keywords + fallback_only 永不进常规竞争
+- id: SK-GENERIC-EVIDENCE-FIRST
+  version: 1
+  title: 通用证据优先排查（无匹配已知模式时）
+  trigger: 无已知故障模式匹配，但存在错误级证据
+  summary: 不预设根因，按错误聚集点 → 首个异常 → 上下文 → 跨组件关联顺序取证。
+  tags: [fallback, evidence-first, orchestration]
+  root_cause_label: null
+  fallback_only: true
+  tools: [aggregate, search_logs, top_templates, find_gaps]
+  probes:
+    - {tool: aggregate, args: {group_by: [component, ota_phase], filters: {min_level: ERROR}, limit: 30}}
+    - {tool: search_logs, args: {query: "", mode: substring, min_level: ERROR, limit: 80}}
+    - {tool: top_templates, args: {sort: error_only, limit: 30}}
+    - {tool: find_gaps, args: {min_gap_seconds: 30, limit: 15}}
+  keywords: []
