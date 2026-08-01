@@ -211,6 +211,23 @@ class AgentGraph:
             actions = list(self.skills.probes_of(sid))
             out["stop"] = False
             out["reason"] = out.get("reason") or "候选全零分且存在 ERROR 信号，注入通用取证技能"
+        # ORCH-01：首轮禁止 stop；驳回后必要时补 actions（最高分非 fallback → GENERIC）
+        if out.get("stop") and st.round_no == 1:
+            self.bus.emit("plan.stop_rejected", Severity.ALERT, st.round_no,
+                          reason="首轮不允许 stop", model_reason=out.get("reason"))
+            self.metrics.inc("plan.stop_rejected")
+            out["stop"] = False
+            if not actions:
+                pick = sid if sid and sid in self.skills.by_id else None
+                if not pick and cands:
+                    pick = cands[0]["id"]  # retrieve 已按相关度降序，且排除 fallback_only
+                if not pick:
+                    pick = FALLBACK_SKILL_ID
+                sid = pick
+                actions = list(self.skills.probes_of(sid))
+                if not actions:
+                    sid = FALLBACK_SKILL_ID
+                    actions = list(self.skills.probes_of(FALLBACK_SKILL_ID))
         # ORCH-07：同 (skill_id, args_hash) 探针去重，避免确定性重跑烧预算
         if sid and actions:
             seen = set(st.executed_probes)
