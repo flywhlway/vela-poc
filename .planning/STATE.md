@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: 真实 LLM 生产级可信化与双驱动架构升级
 status: executing
-stopped_at: Completed 03-03-PLAN.md
-last_updated: "2026-08-01T06:07:38.595Z"
+stopped_at: Completed 03-04-PLAN.md
+last_updated: "2026-08-01T06:10:57.469Z"
 last_activity: 2026-08-01
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 21
-  completed_plans: 17
+  completed_plans: 18
   percent: 33
 ---
 
@@ -19,12 +19,12 @@ progress:
 ## Current Position
 
 Phase: 3
-Plan: 4 of 7
+Plan: 5 of 7
 Status: Ready to execute
 Last activity: 2026-08-01
 Total Plans in Phase: 7
 
-**Progress:** [████████░░] 81%
+**Progress:** [█████████░] 86%
 
 ## Performance Metrics
 
@@ -41,6 +41,7 @@ Total Plans in Phase: 7
 | Phase 03 P01 | 4min | 2 tasks | 3 files |
 | Phase 03 P02 | 3min | 2 tasks | 4 files |
 | Phase 03 P03 | 4min | 2 tasks | 6 files |
+| Phase 03 P04 | 2min | 2 tasks | 4 files |
 
 ## Decisions
 
@@ -71,9 +72,11 @@ Total Plans in Phase: 7
 - [Phase 03]: 词面命中作为有效候选分；稠密噪声不算（ORCH-10 全零分判据）
 - [Phase 03]: A1：全零分 AND ERROR 才注入 GENERIC；健康包不注入（03-03）
 - [Phase 03]: 探针去重键={skill_id}:blake2b(canonical_json(args),8)（ORCH-07）
+- [Phase 03]: 驳回后无有效 selected_skill：取 retrieve 候选首项（已排除 fallback_only），再否则 GENERIC（03-04）
+- [Phase 03]: 首轮 stop 守卫置于 A1 GENERIC 注入之后、探针去重之前（03-04）
 
 ## Session
 
-Last session: 2026-08-01T06:07:38.589Z
-Stopped at: Completed 03-03-PLAN.md
+Last session: 2026-08-01T06:10:57.463Z
+Stopped at: Completed 03-04-PLAN.md
 Resume file: None
