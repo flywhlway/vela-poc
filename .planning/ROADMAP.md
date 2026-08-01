@@ -114,7 +114,7 @@ Plans:
 
 **Wave 1** *(blocked on Wave 0)*
 
-- [ ] 03-02-PLAN.md — LLM 输出契约：_llm_json / 禁跨段解析 / max_tokens=2048 / truncation（ORCH-03/04）
+- [x] 03-02-PLAN.md — LLM 输出契约：_llm_json / 禁跨段解析 / max_tokens=2048 / truncation（ORCH-03/04）
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -205,7 +205,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. 真实 LLM 环境就绪 | 8/8 | Complete    | 2026-07-31 |
 | 2. 度量可信与真实基线 | 6/6 | Complete    | 2026-08-01 |
-| 3. 编排层逻辑止血 | 1/7 | In Progress|  |
+| 3. 编排层逻辑止血 | 2/7 | In Progress|  |
 | 4. 去循环耦合与反馈闭环 | 0/TBD | Not started | - |
 | 5. 置信度分级与技能治理 | 0/TBD | Not started | - |
 | 6. 双驱动架构：证据通道与仲裁器 | 0/TBD | Not started | - |
