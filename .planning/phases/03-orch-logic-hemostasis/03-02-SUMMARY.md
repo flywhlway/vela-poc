@@ -70,7 +70,7 @@ completed: 2026-08-01
 3. **Task 2 RED: truncation 契约改测** - `c986f47` (test)
 4. **Task 2 GREEN: max_tokens 2048 + 轻量 truncation 测** - `0548743` (feat)
 
-**Plan metadata:** （待 docs commit）
+**Plan metadata:** `a73cd1f` (docs: complete plan)
 
 ## Files Created/Modified
 
