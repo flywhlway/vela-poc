@@ -350,11 +350,18 @@ def test_llm_yaml_planner_verifier_max_tokens_2048():
     assert models["reporter"]["max_tokens"] != 4096
 
 
-def test_truncation_finish_reason_length_counted(built, tmp_path):
-    """ORCH-04: finish_reason==length 时 graph 包装层 emit llm.truncation + metrics。"""
+def test_truncation_finish_reason_length_counted(tmp_path):
+    """ORCH-04: finish_reason==length 时 graph 包装层 emit llm.truncation + metrics。
+
+    不经 AgentGraph.__init__（避免 test-fast 拉建库 fixture / DuckDB）。
+    """
+    from types import SimpleNamespace
+
     from vela.agent.graph import AgentGraph
-    from vela.gateway.base import LLMResponse
+    from vela.gateway.base import LLMGateway, LLMResponse
     from vela.gateway.mock import MockProvider
+    from vela.obs.events import EventBus
+    from vela.obs.metrics import Metrics
 
     class LengthProvider(MockProvider):
         def complete(self, req, phys, params):
@@ -372,14 +379,14 @@ def test_truncation_finish_reason_length_counted(built, tmp_path):
                 raw=r.raw,
             )
 
-    g = AgentGraph(built["db"], workspace=tmp_path / "orch04", session_id="ORCH-04")
-    try:
-        g.gw.provider = LengthProvider({}, name="mock")
-        g.ledger.start_round()
-        g._llm("planner", "s", "hello trunc")
-        assert g.metrics.counters.get("llm.truncation", 0) >= 1
-        assert any(e.kind == "llm.truncation" for e in g.bus.since(0))
-        hist = g.gw.history[-1]
-        assert hist.get("finish_reason") == "length"
-    finally:
-        g.close()
+    g = object.__new__(AgentGraph)
+    g.metrics = Metrics()
+    g.bus = EventBus(tmp_path / "events.jsonl", session_id="ORCH-04")
+    g.state = SimpleNamespace(round_no=0)
+    g.gw = LLMGateway(LengthProvider({}, name="mock"), session_id="ORCH-04",
+                      audit_path=tmp_path / "trunc_audit.jsonl")
+    g.gw.ledger.start_round()
+    AgentGraph._llm(g, "planner", "s", "hello trunc")
+    assert g.metrics.counters.get("llm.truncation", 0) >= 1
+    assert any(e.kind == "llm.truncation" for e in g.bus.since(0))
+    assert g.gw.history[-1].get("finish_reason") == "length"

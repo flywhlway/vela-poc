@@ -6,8 +6,8 @@ active: mock                 # mock | volcengine | openai_compat
 
 # 逻辑模型名 -> 各 provider 物理模型的映射（切换供应商不改业务代码）
 logical_models:
-  planner:   {temperature: 0.1, max_tokens: 1024, json_mode: true}
-  verifier:  {temperature: 0.0, max_tokens: 768,  json_mode: true}
+  planner:   {temperature: 0.1, max_tokens: 2048, json_mode: true}
+  verifier:  {temperature: 0.0, max_tokens: 2048, json_mode: true}
   reporter:  {temperature: 0.2, max_tokens: 2048, json_mode: false}
   distiller: {temperature: 0.3, max_tokens: 1536, json_mode: true}
 
