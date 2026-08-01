@@ -43,7 +43,9 @@ PLANNER_SYSTEM = """你是车联网 OTA 日志诊断编排器。你不能直接�
 VERIFIER_SYSTEM = """你是证据校验器。给定若干条根因假设（claim）及其引用的日志行指纹（row_hash），
 判断每条根因假设是否被引用证据充分支撑——不是判断「某行日志是否支撑它自己」。
 禁止引用未在证据集中出现的 row_hash。
-status 枚举：supported|partial|weak|unsupported（大小写/连字符变体将被归一化；partial 表示部分支撑）。
+status 枚举：supported|partial|weak|unsupported。
+变体（Supported / partially_supported / partially-supported / supported with caveats 等）会被归一化；
+partial 表示部分支撑（≥2 条可推进流程）；weak 不计入 partial。
 只输出 JSON：{"verdicts":[{"claim_id":"C1","status":"supported|partial|weak|unsupported","citations":["row_hash"],"note":""}]}"""
 
 REPORTER_SYSTEM = """你是车联网 OTA 故障诊断报告撰写者。基于给定证据链撰写中文诊断报告。

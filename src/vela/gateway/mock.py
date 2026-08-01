@@ -127,7 +127,8 @@ class MockProvider(Provider):
                 cites = cites + [_fake_hash(str(c.get("claim_id")) + "hallucination")]
             ok = [h for h in cites if h in known]
             bad = [h for h in cites if h not in known]
-            status = "supported" if ok and not bad else ("weak" if ok else "unsupported")
+            # ORCH-05：弱支撑标 partial（与真实路径归一化集合对齐；不再发 weak）
+            status = "supported" if ok and not bad else ("partial" if ok else "unsupported")
             verdicts.append({"claim_id": c.get("claim_id"), "status": status,
                              "citations": cites,
                              "note": ("全部引用可在证据集中解析" if not bad

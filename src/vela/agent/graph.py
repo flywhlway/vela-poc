@@ -42,12 +42,20 @@ from vela.util.timeutil import iso
 
 UTC = timezone.utc
 _JSON_FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.S)
+# ORCH-05：verifier status 归一化后可推进的集合（supported 单独计；其余为 partial）
+_OK = {"supported", "partial", "partially_supported", "supported_with_caveats"}
 BIRDSEYE_PROBES = [
     {"tool": "describe_dataset", "args": {}},
     {"tool": "phase_timeline", "args": {}},
     {"tool": "top_templates", "args": {"sort": "error_only", "limit": 25}},
     {"tool": "find_gaps", "args": {"min_gap_seconds": 20, "limit": 10}},
 ]
+
+
+def _norm_status(s: str | None) -> str:
+    """归一化 verifier status：大小写/连字符/空格变体 → snake_case 枚举键。"""
+    return str(s or "").strip().lower().replace("-", "_").replace(" ", "_")
+
 
 
 def _args_hash(args: dict) -> str:
@@ -339,8 +347,13 @@ class AgentGraph:
                 payload["rate"] = cite_rep.dangling_rate
             self.bus.emit("verify.dangling_citation", Severity.ALERT, st.round_no, **payload)
             self.metrics.inc("verify.dangling", len(cite_rep.dangling))
-        supported = [v for v in verdicts if v.get("status") == "supported"]
-        decisive = (bool(supported) and has_error_evidence and skill_id is not None
+        # ORCH-05：枚举归一化；decisive = supported 或 ≥2 partial（未知 status 不推进）
+        supported = [v for v in verdicts if _norm_status(v.get("status")) == "supported"]
+        partial = [v for v in verdicts
+                   if _norm_status(v.get("status")) in _OK
+                   and _norm_status(v.get("status")) != "supported"]
+        decisive = ((bool(supported) or len(partial) >= 2)
+                    and has_error_evidence and skill_id is not None
                     and self.skills.label_of(skill_id) is not None)
         self.bus.emit("verify.done", Severity.MILESTONE, st.round_no,
                       claims=len(claims), supported=len(supported), decisive=decisive)
