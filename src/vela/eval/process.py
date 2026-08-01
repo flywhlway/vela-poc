@@ -1,7 +1,8 @@
 """过程指标与决策轨迹聚合（METR-05）；消融代理指标（METR-08）。
 
 全部在 eval 侧事后聚合，不改 AgentGraph 控制流。
-报表须标注「代理口径，Phase 5 后替换」/「聚合自 events，Phase 3 前允许偏高」。
+有真实事件（llm.parse_failure / llm.truncation / plan.stop_rejected）时优先计真实事件，
+否则回退代理口径。
 """
 from __future__ import annotations
 
@@ -26,9 +27,16 @@ ABLATION_METRIC_KEYS = (
     "confidence_calibration_error",
 )
 
+# ORCH-09 / RESEARCH A4：诚实终态不计入 misdiagnosis 分子
+MISDIAGNOSIS_EXCLUDED_STATUSES = frozenset({
+    "insufficient_citation",
+    "insufficient_coverage",
+})
+
 PROXY_FOOTNOTE = (
-    "注：过程/消融指标为代理口径（聚合自 SessionState/events/audit），"
-    "Phase 3 前允许偏高；依赖六级置信度或 novel: 的字段 Phase 5 后替换。"
+    "注：过程/消融指标优先聚合真实事件（llm.parse_failure / llm.truncation / "
+    "plan.stop_rejected），无真实事件时回退代理口径（SessionState/events/audit）；"
+    "依赖六级置信度或 novel: 的字段 Phase 5 后替换。"
 )
 
 
@@ -38,6 +46,10 @@ def _events(case: dict) -> list[dict]:
 
 def _payload(ev: dict) -> dict:
     return ev.get("payload") or {}
+
+
+def _has_kind(evs: list[dict], kind: str) -> bool:
+    return any(e.get("kind") == kind for e in evs)
 
 
 def decision_trace(cases: list[dict]) -> list[dict]:
@@ -72,7 +84,11 @@ def _r(x: float) -> float:
 
 
 def aggregate_process_metrics(cases: list[dict]) -> dict[str, Any]:
-    """从用例夹具（含 events/rounds/audit/report_md）聚合 7 项过程指标。"""
+    """从用例夹具（含 events/rounds/audit/report_md）聚合 7 项过程指标。
+
+    真实事件优先：若任一例含 llm.parse_failure / llm.truncation / plan.stop_rejected，
+    对应指标按真实事件计；否则回退代理口径。
+    """
     n = len(cases) or 1
     premature = 0
     parse_fail = 0
@@ -82,25 +98,47 @@ def aggregate_process_metrics(cases: list[dict]) -> dict[str, Any]:
     unexplained_vals: list[float] = []
     coverages: list[float] = []
 
+    any_real_parse = any(_has_kind(_events(c), "llm.parse_failure") for c in cases)
+    any_real_trunc = any(_has_kind(_events(c), "llm.truncation") for c in cases)
+    any_real_stop_rej = any(_has_kind(_events(c), "plan.stop_rejected") for c in cases)
+
     for c in cases:
         evs = _events(c)
         plan_dones = [e for e in evs if e.get("kind") == "plan.done"]
-        # premature：首轮 stop=True
-        first = next((e for e in plan_dones if e.get("round_no") == 1), None)
-        if first and _payload(first).get("stop"):
-            premature += 1
-        # parse failure 代理：plan.done 且 skill is None 且 stop=False 且无 actions
-        for e in plan_dones:
-            p = _payload(e)
-            acts = p.get("actions") or []
-            if p.get("skill") is None and not p.get("stop") and not acts:
+
+        # premature：有 plan.stop_rejected 时按「首轮被驳回」计；否则代理=首轮 stop=True
+        if any_real_stop_rej:
+            if any(e.get("kind") == "plan.stop_rejected" and e.get("round_no") == 1
+                   for e in evs):
+                premature += 1
+        else:
+            first = next((e for e in plan_dones if e.get("round_no") == 1), None)
+            if first and _payload(first).get("stop"):
+                premature += 1
+
+        # parse failure：真实事件优先，否则代理（空 plan.done）
+        if any_real_parse:
+            if _has_kind(evs, "llm.parse_failure"):
                 parse_fail += 1
-                break
-        # truncation：audit finish_reason==length
-        for a in c.get("audit") or []:
+        else:
+            for e in plan_dones:
+                p = _payload(e)
+                acts = p.get("actions") or []
+                if p.get("skill") is None and not p.get("stop") and not acts:
+                    parse_fail += 1
+                    break
+
+        # truncation：真实事件优先（用例级有/无），否则 audit finish_reason==length
+        if any_real_trunc:
             trunc_den += 1
-            if a.get("finish_reason") == "length":
+            if _has_kind(evs, "llm.truncation"):
                 trunc_num += 1
+        else:
+            for a in c.get("audit") or []:
+                trunc_den += 1
+                if a.get("finish_reason") == "length":
+                    trunc_num += 1
+
         # verdict supported
         for e in evs:
             if e.get("kind") == "verify.done":
@@ -152,7 +190,8 @@ def aggregate_ablation_metrics(cases: list[dict]) -> dict[str, Any]:
         pred = c.get("predicted_label")
         expected = c.get("expected_label")
         answered = status == "answered"
-        if answered and pred and expected and pred != expected:
+        if (status not in MISDIAGNOSIS_EXCLUDED_STATUSES
+                and answered and pred and expected and pred != expected):
             mis += 1
         if status in ("unanswerable", "human_gate") or _no_fault(pred):
             novel += 1

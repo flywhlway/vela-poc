@@ -364,10 +364,20 @@ class AgentGraph:
     def node_report(self, st: SessionState, skill_id: str | None) -> dict:
         chain = self._build_chain(st)
         rc = self._root_cause(st, skill_id, chain)
+        # ORCH-09：全局未解释 ERROR 哨兵——禁 no_fault_found，附 samples[:10]
+        rc = self._guard_unexplained_errors(st, rc)
         payload = {"question": st.question, "root_cause": rc, "chain": chain,
                    "unresolved": st.unresolved, "budget": self.ledger.snapshot(),
                    "session_id": st.session_id}
         text = self._llm("reporter", REPORTER_SYSTEM, reporter_user(payload))
+        samples = rc.get("unexplained_samples") or []
+        if samples and "未解释错误" not in text:
+            lines = []
+            for s in samples[:10]:
+                rh = s.get("row_hash") or "?"
+                raw = (s.get("raw_line") or "")[:160]
+                lines.append(f"- row_hash={rh} | {raw}")
+            text += "\n\n### 未解释错误行（覆盖不足）\n" + "\n".join(lines) + "\n"
         rep = verify_citations(text, [c["row_hash"] for c in chain], api=self.api)
         if rep.dangling:
             text = strip_dangling(text, rep.dangling)
@@ -377,30 +387,32 @@ class AgentGraph:
             self.bus.emit("report.dangling_citation", Severity.ALERT, st.round_no, **dpay)
 
         # ORCH-08：引用比例闸门（阈值来自 budget.yaml，禁止硬编码字面量）
-        report_cfg = (load_yaml("budget.yaml") or {}).get("report") or {}
-        min_ratio = float(report_cfg["min_citation_ratio"])
-        chain_len = len(chain)
-        if chain_len and not citation_ratio_ok(text, chain_len, min_ratio):
-            need = math.ceil(min_ratio * chain_len)
-            fix_hint = (
-                f"\n\n【引用修复】上次报告有效引用不足："
-                f"需要至少 {need} 个 [[EV:row_hash]]（证据链 {chain_len} 条，"
-                f"比例 ≥ {min_ratio}）。请在事实句中补齐真实证据引用后重写。"
-            )
-            text = self._llm("reporter", REPORTER_SYSTEM, reporter_user(payload) + fix_hint)
-            rep = verify_citations(text, [c["row_hash"] for c in chain], api=self.api)
-            if rep.dangling:
-                text = strip_dangling(text, rep.dangling)
-            if not citation_ratio_ok(text, chain_len, min_ratio):
-                st.status = "insufficient_citation"
-                if rc.get("label") not in ("insufficient_coverage",):
-                    rc = {**rc, "label": "insufficient_citation"}
-                self.bus.emit(
-                    "report.insufficient_citation", Severity.ALERT, st.round_no,
-                    citations=len(extract_citations(text)), chain_len=chain_len,
-                    min_ratio=min_ratio, required=need,
+        # insufficient_coverage 已是诚实终态，不再用引用比例覆盖
+        if st.status != "insufficient_coverage":
+            report_cfg = (load_yaml("budget.yaml") or {}).get("report") or {}
+            min_ratio = float(report_cfg["min_citation_ratio"])
+            chain_len = len(chain)
+            if chain_len and not citation_ratio_ok(text, chain_len, min_ratio):
+                need = math.ceil(min_ratio * chain_len)
+                fix_hint = (
+                    f"\n\n【引用修复】上次报告有效引用不足："
+                    f"需要至少 {need} 个 [[EV:row_hash]]（证据链 {chain_len} 条，"
+                    f"比例 ≥ {min_ratio}）。请在事实句中补齐真实证据引用后重写。"
                 )
-                self.metrics.inc("report.insufficient_citation")
+                text = self._llm("reporter", REPORTER_SYSTEM, reporter_user(payload) + fix_hint)
+                rep = verify_citations(text, [c["row_hash"] for c in chain], api=self.api)
+                if rep.dangling:
+                    text = strip_dangling(text, rep.dangling)
+                if not citation_ratio_ok(text, chain_len, min_ratio):
+                    st.status = "insufficient_citation"
+                    if rc.get("label") != "insufficient_coverage":
+                        rc = {**rc, "label": "insufficient_citation"}
+                    self.bus.emit(
+                        "report.insufficient_citation", Severity.ALERT, st.round_no,
+                        citations=len(extract_citations(text)), chain_len=chain_len,
+                        min_ratio=min_ratio, required=need,
+                    )
+                    self.metrics.inc("report.insufficient_citation")
 
         st.root_cause = rc
         st.report_md = text
@@ -440,6 +452,36 @@ class AgentGraph:
                       seen_evidence=len(st.seen_row_hashes), rounds=st.round_no)
 
     def node_unanswerable(self, st: SessionState, reason: str) -> None:
+        # ORCH-09：落地前扫描；库有未入池 ERROR 时降级 insufficient_coverage（非空 samples）
+        sweep = self._unexplained_error_sweep(st)
+        samples = list(sweep.get("samples") or [])
+        if samples:
+            st.status = "insufficient_coverage"
+            st.root_cause = {
+                "label": "insufficient_coverage",
+                "title": "存在未解释的错误级日志，证据覆盖不足",
+                "unexplained_samples": samples,
+                "evidence_count": 0,
+            }
+            st.unresolved.append(reason)
+            lines = []
+            for s in samples[:10]:
+                rh = s.get("row_hash") or "?"
+                raw = (s.get("raw_line") or "")[:160]
+                lines.append(f"- row_hash={rh} | {raw}")
+            st.report_md = (
+                f"## 诊断结论\n\n**覆盖不足：库中存在未被证据池解释的 ERROR。**\n\n"
+                f"原因：{reason}\n\n"
+                f"### 未解释错误行\n" + "\n".join(lines) + "\n"
+            )
+            self.bus.emit(
+                "coverage.unexplained_errors", Severity.ALERT, st.round_no,
+                unexplained=int(sweep.get("unexplained") or len(samples)),
+                total_errors=int(sweep.get("total_errors") or 0),
+                samples=samples,
+            )
+            self.metrics.inc("coverage.unexplained_errors")
+            return
         st.status = "unanswerable"
         st.unresolved.append(reason)
         st.report_md = (f"## 诊断结论\n\n**证据不足以支撑根因判定。**\n\n原因：{reason}\n\n"
@@ -619,6 +661,55 @@ class AgentGraph:
         for r in ctx[:3]:
             chain.append({**_slim(r), "role": "CONTEXT"})
         return chain
+
+    def _unexplained_error_sweep(self, st: SessionState) -> dict:
+        """ORCH-09：经 LogQueryAPI 扫描未入池 ERROR；禁止 api._q。"""
+        res = self.api.call("search_logs", query="", mode="substring",
+                            min_level="ERROR", limit=200)
+        if not res.ok:
+            return {"clean": True, "unexplained": 0, "error": res.error, "samples": []}
+        err_hashes = {r.get("row_hash") for r in res.rows if r.get("row_hash")}
+        if not err_hashes:
+            return {"clean": True, "unexplained": 0, "total_errors": 0, "samples": []}
+        seen = {r.get("row_hash") for r in st.evidence_pool if r.get("row_hash")}
+        unexplained = [r for r in res.rows if r.get("row_hash") not in seen]
+        return {"clean": not unexplained, "total_errors": len(err_hashes),
+                "unexplained": len(unexplained), "samples": unexplained[:10]}
+
+    def _guard_unexplained_errors(self, st: SessionState, rc: dict) -> dict:
+        """未解释 ERROR 非空且将输出 no_fault_found → insufficient_coverage + samples。"""
+        sweep = self._unexplained_error_sweep(st)
+        samples = list(sweep.get("samples") or [])
+        if not samples:
+            return rc
+        if rc.get("label") != "no_fault_found":
+            # 仍 emit 供过程指标；不改已有故障标签
+            self.bus.emit(
+                "coverage.unexplained_errors", Severity.ALERT, st.round_no,
+                unexplained=int(sweep.get("unexplained") or len(samples)),
+                total_errors=int(sweep.get("total_errors") or 0),
+                samples=samples,
+            )
+            return {**rc, "unexplained_samples": samples}
+        st.status = "insufficient_coverage"
+        guarded = {
+            **rc,
+            "label": "insufficient_coverage",
+            "title": "存在未解释的错误级日志，禁止判定无故障",
+            "unexplained_samples": samples,
+            "actions": [
+                "库中存在未被证据池覆盖的 ERROR/FATAL 行，结论降级为覆盖不足。",
+                "请针对未解释错误行继续下钻或补充采集窗口。",
+            ],
+        }
+        self.bus.emit(
+            "coverage.unexplained_errors", Severity.ALERT, st.round_no,
+            unexplained=int(sweep.get("unexplained") or len(samples)),
+            total_errors=int(sweep.get("total_errors") or 0),
+            samples=samples,
+        )
+        self.metrics.inc("coverage.unexplained_errors")
+        return guarded
 
     def _root_cause(self, st: SessionState, skill_id: str | None, chain: list[dict]) -> dict:
         sk = self.skills.by_id.get(skill_id or "") or {}
