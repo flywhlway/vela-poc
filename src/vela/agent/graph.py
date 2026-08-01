@@ -288,15 +288,41 @@ class AgentGraph:
                       folded=cr.trace.get("folded_total", 0))
         return {"result": cr, "new": new, "hashes": hashes}
 
+    def _hypothesis_claim(self, skill_id: str | None) -> str:
+        """构造根因假设文本（技能语义），禁止用 raw_line 自证。"""
+        sk = self.skills.by_id.get(skill_id or "") or {}
+        label = sk.get("root_cause_label") or (
+            self.skills.label_of(skill_id) if skill_id else None)
+        title = str(sk.get("title") or "").strip()
+        summary = str(sk.get("summary") or "").strip()
+        if title and label:
+            text = f"根因假设：{title}（{label}）"
+        elif title:
+            text = f"根因假设：{title}"
+        elif label:
+            text = f"根因假设：{label}"
+        else:
+            text = "根因假设：证据指向的故障模式待确认"
+        if summary and summary not in text:
+            text = f"{text}：{summary}"
+        return text[:200]
+
     def node_verify(self, st: SessionState, cr, skill_id: str | None) -> dict:
         errs = [r for r in cr.kept
                 if str(r.get("level_norm") or "").upper() in ("ERROR", "FATAL")]
         # 没有错误级证据时不得据此下结论：否则健康会话也会被"诊断"出根因（假阳性）
         has_error_evidence = bool(errs)
         ev = errs[:8] or cr.kept[:5]
-        claims = [{"claim_id": f"C{i+1}",
-                   "claim": str(r.get("raw_line") or r.get("preview") or "")[:200],
-                   "citations": [r.get("row_hash")]} for i, r in enumerate(ev) if r.get("row_hash")]
+        # ORCH-06：单条（或少量）根因假设 + 多 citations；claims ≤5
+        citations = [r["row_hash"] for r in ev if r.get("row_hash")]
+        claims: list[dict] = []
+        if citations:
+            claims.append({
+                "claim_id": "C1",
+                "claim": self._hypothesis_claim(skill_id),
+                "citations": citations,
+            })
+        claims = claims[:5]
         payload = {"claims": claims,
                    "known_row_hashes": [r["row_hash"] for r in cr.kept if r.get("row_hash")],
                    "compression_trace": cr.trace}
