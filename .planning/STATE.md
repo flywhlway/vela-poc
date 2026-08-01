@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: 真实 LLM 生产级可信化与双驱动架构升级
-status: executing
-stopped_at: Completed 03-06-PLAN.md
-last_updated: "2026-08-01T06:19:57.571Z"
+status: verifying
+stopped_at: Completed 03-07-PLAN.md
+last_updated: "2026-08-01T06:23:29.661Z"
 last_activity: 2026-08-01
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 21
-  completed_plans: 20
-  percent: 33
+  completed_plans: 21
+  percent: 50
 ---
 
 # Project State
@@ -20,11 +20,11 @@ progress:
 
 Phase: 3
 Plan: 7 of 7
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-01
 Total Plans in Phase: 7
 
-**Progress:** [██████████] 95%
+**Progress:** [██████████] 100%
 
 ## Performance Metrics
 
@@ -44,6 +44,7 @@ Total Plans in Phase: 7
 | Phase 03 P04 | 2min | 2 tasks | 4 files |
 | Phase 03 P05 | 2min | 2 tasks | 4 files |
 | Phase 03 P06 | 4min | 2 tasks | 7 files |
+| Phase 03 P07 | 3min | 2 tasks | 2 files |
 
 ## Decisions
 
@@ -82,9 +83,11 @@ Total Plans in Phase: 7
 - [Phase 03]: status 与 root_cause.label 同步 insufficient_*；run 不覆盖诚实终态
 - [Phase 03]: 降级时 samples 同时进 emit payload、root_cause.unexplained_samples、报告附录
 - [Phase 03]: 过程指标按批次是否含真实事件切换口径；ablation 分母仍含 insufficient_*、分子排除
+- [Phase 03]: Phase 3 gate: mock eval regression=0；健康例用 specificity 判定
+- [Phase 03]: ORCH 勾选以 GATE-RESULTS 实测为准（03-07）
 
 ## Session
 
-Last session: 2026-08-01T06:19:57.566Z
-Stopped at: Completed 03-06-PLAN.md
+Last session: 2026-08-01T06:23:29.656Z
+Stopped at: Completed 03-07-PLAN.md
 Resume file: None
