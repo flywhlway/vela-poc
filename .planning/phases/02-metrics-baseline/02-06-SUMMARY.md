@@ -34,8 +34,8 @@ completed: 2026-08-01
 ## Task Commits
 
 1. **Task 1: bench/Makefile/README** — `fa514b4` / `1a4d4ee`
-2. **Task 2: GATE-RESULTS** — `efd628e`
-3. **Task 3: 付费基线落盘** — 本 SUMMARY 同批（report.md + result.json）
+2. **Task 2: GATE-RESULTS** — 初记曾误用 volcengine 作回归门；`ba542fb` 钉死 `make eval --provider mock` 后重跑归零
+3. **Task 3: 付费基线落盘** — `290899e`（report.md + result.json）；人工 `approved` 2026-08-01
 
 ## Key numbers
 
