@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: 真实 LLM 生产级可信化与双驱动架构升级
 status: executing
-stopped_at: Phase 2 plans created
-last_updated: "2026-08-01T05:52:21.939Z"
-last_activity: 2026-08-01 -- Phase 3 planning complete
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-08-01T05:57:34.763Z"
+last_activity: 2026-08-01
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 21
-  completed_plans: 14
-  percent: 33
+  completed_plans: 15
+  percent: 71
 ---
 
 # Project State
@@ -19,11 +19,12 @@ progress:
 ## Current Position
 
 Phase: 3
-Plan: Not started
+Plan: 2 of 7
 Status: Ready to execute
-Last activity: 2026-08-01 -- Phase 3 planning complete
+Last activity: 2026-08-01
+Total Plans in Phase: 7
 
-**Progress:** [███░░░░░░░] 33%（Phase 1–2 完成；待 discuss Phase 3）
+**Progress:** [███████░░░] 71%
 
 ## Performance Metrics
 
@@ -37,6 +38,7 @@ Last activity: 2026-08-01 -- Phase 3 planning complete
 | Phase 01-llm P06 | 3min | 2 tasks | 2 files |
 | Phase 01-llm P07 | 3min | 2 tasks | 2 files |
 | Phase 01 P08 | continuation | 2 tasks | 8 files |
+| Phase 03 P01 | 4min | 2 tasks | 3 files |
 
 ## Decisions
 
@@ -60,9 +62,11 @@ Last activity: 2026-08-01 -- Phase 3 planning complete
 - [Phase 01]: 方舟 BASE_URL 同时接受 /api/v3 与 /api/plan/v3；形态坏例改用 /api/v2（01-08）
 - [Phase 01]: realllm doctor 连通性断言收紧为四项全绿；ENV 四条需求在 Plan 08 实测后统一勾选（01-08）
 - [Phase 02]: 规划为 6 plans / 4 waves；Wave1 并行闸门+指纹+缓存成本；METR-09/PERF-01 收尾 Plan 06；ADR-2 禁止改 graph 推理
+- [Phase 03]: Wave 0 不改生产代码；旧 excluded 测保留，新 unproductive_only xfail 锁定契约（03-01）
+- [Phase 03]: ORCH 需求勾选留给实现 plan；03-01 仅建立采样连续性（03-01）
 
 ## Session
 
-Last session: 2026-07-31T15:20:09.626Z
-Stopped at: Phase 2 plans created
-Resume file: .planning/phases/02-metrics-baseline/02-01-PLAN.md
+Last session: 2026-08-01T05:57:34.758Z
+Stopped at: Completed 03-01-PLAN.md
+Resume file: None
