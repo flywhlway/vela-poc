@@ -64,7 +64,7 @@ completed: 2026-08-01
 1. **Task 1: 全量测试与 mock eval 回归门** - `b134b9a` (docs)
 2. **Task 2: 勾选 ORCH-01..10 并核对过程指标观测点** - `ec295ea` (docs)
 
-**Plan metadata:** （本 SUMMARY 提交后回填）
+**Plan metadata:** `1d51268` (docs: complete plan)
 
 ## Files Created/Modified
 
