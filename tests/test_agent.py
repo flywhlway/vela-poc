@@ -327,7 +327,6 @@ def test_parse_json_no_cross_span_and_retry_alert(built, tmp_path):
         g.close()
 
 
-@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-05")
 def test_verdict_norm_partial_decisive(built, tmp_path):
     """ORCH-05: Supported 可 decisive；≥2 条 partial 才 decisive；单条 partial/unsupported 否。"""
 
