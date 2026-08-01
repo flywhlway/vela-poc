@@ -367,7 +367,6 @@ def test_verdict_norm_partial_decisive(built, tmp_path):
     assert unsupported["decisive"] is False
 
 
-@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-05")
 def test_verify_claim_hypothesis_not_raw_line_loop(built, tmp_path):
     """ORCH-06: claims[0].claim 不得等于证据 raw_line 自证循环；应含技能根因假设语义。"""
     raw = "NRC received sid=0x36 nrc=0x72 generalProgrammingFailure"
