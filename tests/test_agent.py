@@ -458,7 +458,6 @@ def test_probe_dedup_same_args_skipped(built, tmp_path):
         g.close()
 
 
-@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-06")
 def test_insufficient_citation_retry_then_status(built, tmp_path):
     """ORCH-08: 引用数 < 0.5*chain_len → 重试一次 → 仍不足则 status==insufficient_citation。"""
 
