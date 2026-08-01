@@ -68,7 +68,7 @@ completed: 2026-08-01
 3. **Task 2 RED: stop_rejected 契约** - `14c63ee` (test)
 4. **Task 2 GREEN: ORCH-01 首轮 stop 守卫** - `bf43f50` (feat)
 
-**Plan metadata:** （待 docs commit）
+**Plan metadata:** `9bf4d77` (docs: complete plan)
 
 ## Files Created/Modified
 
