@@ -130,7 +130,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4)*
 
-- [ ] 03-06-PLAN.md — 引用比例闸门 + 未解释错误哨兵 + 过程指标真实事件口径（ORCH-08/09）
+- [x] 03-06-PLAN.md — 引用比例闸门 + 未解释错误哨兵 + 过程指标真实事件口径（ORCH-08/09）
 
 **Wave 6** *(blocked on Wave 5)*
 
@@ -205,7 +205,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. 真实 LLM 环境就绪 | 8/8 | Complete    | 2026-07-31 |
 | 2. 度量可信与真实基线 | 6/6 | Complete    | 2026-08-01 |
-| 3. 编排层逻辑止血 | 5/7 | In Progress|  |
+| 3. 编排层逻辑止血 | 6/7 | In Progress|  |
 | 4. 去循环耦合与反馈闭环 | 0/TBD | Not started | - |
 | 5. 置信度分级与技能治理 | 0/TBD | Not started | - |
 | 6. 双驱动架构：证据通道与仲裁器 | 0/TBD | Not started | - |
