@@ -324,3 +324,60 @@ def test_token_budget_hard_cut_still_raises():
     ledger = TokenLedger(budget=load_budget("poc"))
     with pytest.raises(BudgetExceeded):
         ledger.precheck(ledger.budget.round_llm_tokens + 1)
+
+
+# --------------------------------------------------------------------- ORCH Wave 0 skeletons (xfail)
+@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-04")
+def test_planner_system_distinguishes_stop_vs_inconclusive():
+    """ORCH-02: PLANNER_SYSTEM 区分停止调查与无法定论；禁止因尚无证据而 stop。"""
+    assert "证据不足时输出 stop=true" not in PLANNER_SYSTEM
+    text = PLANNER_SYSTEM
+    assert (
+        ("停止调查" in text and ("无法定论" in text or "定论" in text))
+        or ("尚无证据" in text and "stop" in text.lower())
+        or ("禁止" in text and "stop" in text.lower())
+    ), "提示词须区分停止调查与无法定论 / 禁止无证据即 stop"
+
+
+@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-02")
+def test_llm_yaml_planner_verifier_max_tokens_2048():
+    """ORCH-04: planner/verifier max_tokens == 2048。"""
+    from vela.config import load_yaml
+    cfg = load_yaml("llm.yaml")
+    models = cfg["logical_models"]
+    assert models["planner"]["max_tokens"] == 2048
+    assert models["verifier"]["max_tokens"] == 2048
+
+
+@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-02")
+def test_truncation_finish_reason_length_counted(tmp_path):
+    """ORCH-04: finish_reason==length 路径递增 truncation 指标或 truncation_alerted。"""
+    from vela.gateway.base import LLMGateway, LLMRequest, LLMResponse
+    from vela.gateway.mock import MockProvider
+
+    class LengthProvider(MockProvider):
+        def complete(self, req, phys, params):
+            r = super().complete(req, phys, params)
+            return LLMResponse(
+                text=r.text,
+                logical_model=r.logical_model,
+                physical_model=r.physical_model,
+                provider=r.provider,
+                prompt_tokens=r.prompt_tokens,
+                completion_tokens=r.completion_tokens,
+                latency_ms=r.latency_ms,
+                finish_reason="length",
+                fallback_from=r.fallback_from,
+                raw=r.raw,
+            )
+
+    gw = LLMGateway(LengthProvider({}, name="mock"), session_id="TRUNC-ORCH",
+                    audit_path=tmp_path / "trunc_audit.jsonl")
+    gw.ledger.start_round()
+    gw.chat(LLMRequest(logical_model="planner", system="s", user="hello trunc"))
+    hist = gw.history[-1]
+    assert hist.get("finish_reason") == "length"
+    # 仅记录 finish_reason 不够：必须有显式 truncation 告警/计数
+    trunc_metric = getattr(gw, "truncation_count", 0)
+    trunc_flag = bool(hist.get("truncation_alerted"))
+    assert trunc_metric >= 1 or trunc_flag

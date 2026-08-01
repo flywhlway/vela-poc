@@ -1,6 +1,11 @@
 """推理平面：技能召回、压缩痕迹、引用校验、七节点图端到端。"""
 from __future__ import annotations
 
+import json
+from dataclasses import dataclass, field
+
+import pytest
+
 from vela.agent.citations import (
     CitationReport,
     citation_coverage,
@@ -14,6 +19,7 @@ from vela.agent.graph import AgentGraph
 from vela.agent.skills import SkillRegistry
 from vela.agent.state import SessionState
 from vela.config import load_budget
+from vela.gateway.prompts import extract_state
 
 
 # --------------------------------------------------------------------- skills
@@ -251,3 +257,300 @@ def test_agent_checkpoint_is_saved_after_run(built, tmp_path):
     store = CheckpointStore(ws / "sessions")
     loaded = store.load("TEST-CKPT")
     assert loaded is not None and loaded.status == "answered"
+
+
+# --------------------------------------------------------------------- ORCH Wave 0 skeletons (xfail)
+@dataclass
+class _FakeCompressResult:
+    kept: list
+    trace: dict = field(default_factory=dict)
+    tokens_after: int = 0
+    ratio: float = 1.0
+    windows: list = field(default_factory=list)
+
+
+@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-04")
+def test_plan_stop_rejected_round1(built, tmp_path):
+    """ORCH-01: round_no==1 且模型 stop=True → plan.stop_rejected，最终 stop=False。"""
+
+    class ForceStopGraph(AgentGraph):
+        def _llm(self, logical: str, system: str, user: str) -> str:
+            if logical == "planner":
+                return json.dumps({
+                    "thought": "尚无明细证据",
+                    "selected_skill": None,
+                    "actions": [],
+                    "stop": True,
+                    "reason": "证据不足",
+                })
+            return "{}"
+
+    g = ForceStopGraph(built["db"], workspace=tmp_path / "orch01", session_id="ORCH-01")
+    try:
+        st = g.state
+        st.round_no = 1
+        plan = g.node_plan(st)
+        assert g.metrics.counters.get("plan.stop_rejected", 0) >= 1
+        assert any(e.kind == "plan.stop_rejected" for e in g.bus.since(0))
+        assert plan["stop"] is False
+    finally:
+        g.close()
+
+
+@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-02")
+def test_parse_json_no_cross_span_and_retry_alert(built, tmp_path):
+    """ORCH-03: 禁跨段花括号假成功；围栏 JSON 成功；耗尽重试后 llm.parse_failure ALERT。"""
+    from vela.agent.graph import _parse_json
+
+    cross = 'prefix noise {"selected_skill": null, "stop": true, "actions": []} trailing'
+    assert _parse_json(cross) == {}, "跨段花括号不得解析为非空 dict"
+
+    fenced = '```json\n{"selected_skill": "SK-A", "stop": false, "actions": []}\n```'
+    assert _parse_json(fenced).get("selected_skill") == "SK-A"
+
+    class BadJsonGraph(AgentGraph):
+        def _llm(self, logical: str, system: str, user: str) -> str:
+            return "NOT JSON at all {{{"
+
+    g = BadJsonGraph(built["db"], workspace=tmp_path / "orch03", session_id="ORCH-03")
+    try:
+        assert hasattr(g, "_llm_json"), "应提供 _llm_json 统一解析重试"
+        out = g._llm_json("planner", "sys", "user", retries=2)
+        assert out == {}
+        assert g.metrics.counters.get("llm.parse_failure", 0) >= 1
+        assert any(e.kind == "llm.parse_failure" for e in g.bus.since(0))
+    finally:
+        g.close()
+
+
+@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-05")
+def test_verdict_norm_partial_decisive(built, tmp_path):
+    """ORCH-05: Supported 可 decisive；≥2 条 partial 才 decisive；单条 partial/unsupported 否。"""
+
+    err = {"row_hash": "aabbccddeeff0011", "raw_line": "NRC 0x72 erase failed",
+           "level_norm": "ERROR", "line_id": 1, "ts_utc": "t1", "component": "uds_stack"}
+    cr = _FakeCompressResult(kept=[err], trace={"tier_policy": []})
+
+    def _verify(verdicts: list[dict]) -> dict:
+        class VerifyGraph(AgentGraph):
+            def _llm(self, logical: str, system: str, user: str) -> str:
+                if logical == "verifier":
+                    return json.dumps({"verdicts": verdicts})
+                return "{}"
+
+        g = VerifyGraph(built["db"], workspace=tmp_path / "orch05", session_id="ORCH-05")
+        try:
+            return g.node_verify(g.state, cr, "SK-UDS-NRC")
+        finally:
+            g.close()
+
+    supported = _verify([{"claim_id": "C1", "status": "Supported",
+                          "citations": [err["row_hash"]]}])
+    assert supported["decisive"] is True
+
+    two_partial = _verify([
+        {"claim_id": "C1", "status": "partially_supported", "citations": [err["row_hash"]]},
+        {"claim_id": "C2", "status": "partially-supported", "citations": [err["row_hash"]]},
+    ])
+    assert two_partial["decisive"] is True
+
+    one_partial = _verify([{"claim_id": "C1", "status": "partial",
+                            "citations": [err["row_hash"]]}])
+    assert one_partial["decisive"] is False
+
+    unsupported = _verify([{"claim_id": "C1", "status": "unsupported",
+                            "citations": [err["row_hash"]]}])
+    assert unsupported["decisive"] is False
+
+
+@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-05")
+def test_verify_claim_hypothesis_not_raw_line_loop(built, tmp_path):
+    """ORCH-06: claims[0].claim 不得等于证据 raw_line 自证循环；应含技能根因假设语义。"""
+    raw = "NRC received sid=0x36 nrc=0x72 generalProgrammingFailure"
+    err = {"row_hash": "1122334455667788", "raw_line": raw, "level_norm": "ERROR",
+           "line_id": 2, "ts_utc": "t2", "component": "uds_stack"}
+    cr = _FakeCompressResult(kept=[err], trace={})
+
+    class CaptureVerifyGraph(AgentGraph):
+        def __init__(self, *a, **k):
+            super().__init__(*a, **k)
+            self._last_user = ""
+
+        def _llm(self, logical: str, system: str, user: str) -> str:
+            self._last_user = user
+            if logical == "verifier":
+                return json.dumps({"verdicts": [
+                    {"claim_id": "C1", "status": "supported",
+                     "citations": [err["row_hash"]]}]})
+            return "{}"
+
+    g = CaptureVerifyGraph(built["db"], workspace=tmp_path / "orch06", session_id="ORCH-06")
+    try:
+        g.node_verify(g.state, cr, "SK-UDS-NRC")
+        claims = (extract_state(g._last_user) or {}).get("claims") or []
+        assert claims, "verifier 载荷应含 claims"
+        claim_text = str(claims[0].get("claim") or "")
+        assert claim_text != raw, "claim 不得等于证据 raw_line 自身"
+        label = g.skills.label_of("SK-UDS-NRC") or ""
+        hay = claim_text.lower()
+        assert (
+            "根因" in claim_text
+            or "假设" in claim_text
+            or (label and label.lower().replace("_", " ")[:12] in hay.replace("_", " "))
+            or "uds" in hay
+            or "programming" in hay
+        ), "claim 应含技能根因假设语义"
+    finally:
+        g.close()
+
+
+@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-03")
+def test_excluded_skills_unproductive_only():
+    """ORCH-07: excluded_skills 仅含 unproductive，used 可复用。"""
+    st = SessionState(session_id="s1", db_path="x")
+    st.used_skills = ["SK-A"]
+    st.unproductive_skills = ["SK-B"]
+    assert st.excluded_skills() == ["SK-B"]
+
+
+@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-03")
+def test_probe_dedup_same_args_skipped(built, tmp_path):
+    """ORCH-07: 相同 (skill_id, args_hash) 探针第二次应跳过。"""
+    import hashlib
+
+    from vela.util.jsonl import canonical_json
+
+    class DedupGraph(AgentGraph):
+        def _llm(self, logical: str, system: str, user: str) -> str:
+            if logical == "planner":
+                return json.dumps({
+                    "thought": "retry same probe",
+                    "selected_skill": "SK-UDS-NRC",
+                    "actions": [{"tool": "search_logs",
+                                 "args": {"query": "NRC", "mode": "substring"}}],
+                    "stop": False,
+                    "reason": "",
+                })
+            return "{}"
+
+    g = DedupGraph(built["db"], workspace=tmp_path / "orch07", session_id="ORCH-07")
+    try:
+        st = g.state
+        assert hasattr(st, "executed_probes"), "SessionState 应有 executed_probes"
+        args = {"query": "NRC", "mode": "substring"}
+        key = f"SK-UDS-NRC:{hashlib.blake2b(canonical_json(args).encode('utf-8'), digest_size=8).hexdigest()}"
+        st.executed_probes = [key]
+        st.round_no = 2
+        plan = g.node_plan(st)
+        tools = [a.get("tool") for a in (plan.get("actions") or [])]
+        assert "search_logs" not in tools, "同 args 探针应被去重跳过"
+    finally:
+        g.close()
+
+
+@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-06")
+def test_insufficient_citation_retry_then_status(built, tmp_path):
+    """ORCH-08: 引用数 < 0.5*chain_len → 重试一次 → 仍不足则 status==insufficient_citation。"""
+
+    class SparseReportGraph(AgentGraph):
+        def __init__(self, *a, **k):
+            super().__init__(*a, **k)
+            self._reporter_calls = 0
+
+        def _llm(self, logical: str, system: str, user: str) -> str:
+            if logical == "reporter":
+                self._reporter_calls += 1
+                return "证据不足的叙述，几乎无引用。"
+            return "{}"
+
+    g = SparseReportGraph(built["db"], workspace=tmp_path / "orch08", session_id="ORCH-08")
+    try:
+        st = g.state
+        st.evidence_pool = [
+            {"row_hash": f"{i:016x}", "line_id": i, "level_norm": "ERROR",
+             "raw_line": f"error line {i}", "ts_utc": f"t{i:02d}", "component": "uds_stack"}
+            for i in range(1, 9)
+        ]
+        st.used_skills = ["SK-UDS-NRC"]
+        g.node_report(st, "SK-UDS-NRC")
+        assert g._reporter_calls >= 2, "引用不足应触发一次修复重试"
+        assert st.status == "insufficient_citation"
+    finally:
+        g.close()
+
+
+@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-06")
+def test_unexplained_sweep_blocks_no_fault_found(built, tmp_path):
+    """ORCH-09: 库有 ERROR 且 evidence_pool 无对应 row_hash → 禁 no_fault_found；samples 非空。"""
+    g = AgentGraph(built["db"], workspace=tmp_path / "orch09", session_id="ORCH-09")
+    try:
+        st = g.state
+        st.evidence_pool = []
+        assert hasattr(g, "_unexplained_error_sweep"), "应提供未解释错误扫描"
+        sweep = g._unexplained_error_sweep(st)
+        samples = sweep.get("samples") or []
+        assert 1 <= len(samples) <= 10
+        g.node_report(st, None)
+        label = (st.root_cause or {}).get("label")
+        assert label != "no_fault_found"
+        assert st.status == "insufficient_coverage" or label == "insufficient_coverage"
+        ev_kinds = [e.kind for e in g.bus.since(0)]
+        assert "coverage.unexplained_errors" in ev_kinds or samples
+        unexplained_ev = next(
+            (e for e in g.bus.since(0) if e.kind == "coverage.unexplained_errors"), None)
+        if unexplained_ev is not None:
+            payload_samples = unexplained_ev.payload.get("samples") or []
+            assert 1 <= len(payload_samples) <= 10
+    finally:
+        g.close()
+
+
+@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-03")
+def test_generic_fallback_zero_score_inject(built, built_healthy, tmp_path):
+    """ORCH-10: fallback_only 不进常规 retrieve；全零分+ERROR 注入 GENERIC；健康无 ERROR 不注入。"""
+    reg = SkillRegistry()
+    generic = next((s for s in reg.skills if s["id"] == "SK-GENERIC-EVIDENCE-FIRST"), None)
+    assert generic is not None
+    assert generic.get("fallback_only") is True
+    cands = reg.retrieve("zzzz_unrelated_token_qqqq", top_n=20)
+    assert "SK-GENERIC-EVIDENCE-FIRST" not in {c["id"] for c in cands}
+
+    class ZeroScoreGraph(AgentGraph):
+        def _llm(self, logical: str, system: str, user: str) -> str:
+            if logical == "planner":
+                return json.dumps({
+                    "thought": "no match",
+                    "selected_skill": None,
+                    "actions": [],
+                    "stop": True,
+                    "reason": "候选全零分",
+                })
+            return "{}"
+
+    g_err = ZeroScoreGraph(built["db"], workspace=tmp_path / "orch10e", session_id="ORCH-10E")
+    try:
+        st = g_err.state
+        st.round_no = 1
+        st.signals = {"abort_reason": "UDS_NRC_0x72", "fail_phase": "FLASH"}
+        plan = g_err.node_plan(st)
+        actions = plan.get("actions") or []
+        skill = plan.get("skill")
+        generic_probes = {p.get("tool") for p in reg.probes_of("SK-GENERIC-EVIDENCE-FIRST")}
+        injected = (
+            skill == "SK-GENERIC-EVIDENCE-FIRST"
+            or bool(generic_probes & {a.get("tool") for a in actions})
+        )
+        assert injected, "全零分且存在 ERROR 信号时应注入 SK-GENERIC-EVIDENCE-FIRST"
+    finally:
+        g_err.close()
+
+    g_ok = ZeroScoreGraph(built_healthy["db"], workspace=tmp_path / "orch10h",
+                          session_id="ORCH-10H")
+    try:
+        st = g_ok.state
+        st.round_no = 1
+        st.signals = {}
+        plan = g_ok.node_plan(st)
+        assert plan.get("skill") != "SK-GENERIC-EVIDENCE-FIRST"
+    finally:
+        g_ok.close()
