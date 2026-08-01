@@ -49,20 +49,16 @@ BIRDSEYE_PROBES = [
 
 
 def _parse_json(text: str) -> dict:
+    """解析模型 JSON 输出：仅整段或围栏内合法 dict；禁止跨段花括号抢救。"""
     t = (text or "").strip()
     m = _JSON_FENCE.search(t)
     if m:
-        t = m.group(1)
+        t = m.group(1).strip()
     try:
-        return json.loads(t)
+        val = json.loads(t)
+        return val if isinstance(val, dict) else {}
     except json.JSONDecodeError:
-        i, j = t.find("{"), t.rfind("}")
-        if i >= 0 and j > i:
-            try:
-                return json.loads(t[i:j + 1])
-            except json.JSONDecodeError:
-                pass
-    return {}
+        return {}
 
 
 @dataclass
@@ -125,7 +121,26 @@ class AgentGraph:
         with self.metrics.timer(f"llm.{logical}"):
             resp = self.gw.chat(LLMRequest(logical_model=logical, system=system, user=user))
         self.metrics.inc(f"llm.{logical}.calls")
+        if resp.finish_reason == "length":
+            self.bus.emit("llm.truncation", Severity.ALERT, self.state.round_no,
+                          logical_model=logical, finish_reason=resp.finish_reason)
+            self.metrics.inc("llm.truncation")
         return resp.text
+
+    def _llm_json(self, logical: str, system: str, user: str, retries: int = 2) -> dict:
+        """调用逻辑模型并解析为 dict；失败最多重试 retries 次，耗尽发 parse_failure。"""
+        attempts = 1 + max(0, int(retries))
+        last: dict = {}
+        for _ in range(attempts):
+            text = self._llm(logical, system, user)
+            parsed = _parse_json(text)
+            if parsed:
+                return parsed
+            last = parsed
+        self.bus.emit("llm.parse_failure", Severity.ALERT, self.state.round_no,
+                      logical_model=logical, attempts=attempts)
+        self.metrics.inc("llm.parse_failure")
+        return last
 
     # ============================ 节点 ============================ #
     def node_plan(self, st: SessionState) -> dict:
@@ -149,7 +164,7 @@ class AgentGraph:
                    "candidate_skills": cands, "excluded_skills": st.excluded_skills(),
                    "used_skills": st.used_skills,
                    "budget": self.ledger.snapshot()}
-        out = _parse_json(self._llm("planner", PLANNER_SYSTEM, planner_user(payload)))
+        out = self._llm_json("planner", PLANNER_SYSTEM, planner_user(payload))
         sid = out.get("selected_skill")
         # 程序化兜底：模型若选中已被剔除的技能，直接判非法并转不可答
         if sid and sid in set(st.excluded_skills()):
@@ -221,7 +236,7 @@ class AgentGraph:
         payload = {"claims": claims,
                    "known_row_hashes": [r["row_hash"] for r in cr.kept if r.get("row_hash")],
                    "compression_trace": cr.trace}
-        out = _parse_json(self._llm("verifier", VERIFIER_SYSTEM, verifier_user(payload)))
+        out = self._llm_json("verifier", VERIFIER_SYSTEM, verifier_user(payload))
         verdicts = out.get("verdicts") or []
         # 程序化独立校验：不采信模型自述
         blob = " ".join(json.dumps(v, ensure_ascii=False) for v in verdicts)
@@ -277,7 +292,7 @@ class AgentGraph:
         payload = {"session_id": st.session_id, "root_cause": st.root_cause,
                    "tools_used": st.tools_used, "used_skills": st.used_skills,
                    "signal_terms": _signal_terms(st)}
-        out = _parse_json(self._llm("distiller", DISTILLER_SYSTEM, distiller_user(payload)))
+        out = self._llm_json("distiller", DISTILLER_SYSTEM, distiller_user(payload))
         if out.get("skill"):
             p = self.ws / "knowledge" / "candidates.jsonl"
             from vela.util.jsonl import append_jsonl
