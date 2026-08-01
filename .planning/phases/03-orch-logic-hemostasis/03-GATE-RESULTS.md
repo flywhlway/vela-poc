@@ -94,3 +94,30 @@ S9_TIME_DRIFT
 ## 6. 结论（Task 1）
 
 **gate_status: PASSED** — `make test` 全绿 + mock `make eval` regression = 0 → 允许进入 Task 2 勾选 ORCH-01..ORCH-10。
+
+## 7. ORCH-01..10 核对表（Task 2，回归门通过后）
+
+REQUIREMENTS.md 中 ORCH-01..ORCH-10 在本 gate 实测通过后确认为全部 `[x]`（先落盘本文件再勾选/核对，禁止预勾）。
+
+| ORCH | `-k` 覆盖（无 xfail） | 关键事件 / 路径 |
+|------|----------------------|----------------|
+| ORCH-01 | `stop_rejected` | `plan.stop_rejected` → `graph.py` |
+| ORCH-02 | `planner_system` | `PLANNER_SYSTEM` 提示词（gateway/prompts） |
+| ORCH-03 | `parse_json` | `llm.parse_failure` → `graph.py` / `process.py` |
+| ORCH-04 | `max_tokens` / `truncation` | `llm.truncation` → `graph.py` / `process.py` |
+| ORCH-05 | `verdict_norm` | verifier 枚举归一化 |
+| ORCH-06 | `verify_claim_hypothesis` | claim=根因假设 |
+| ORCH-07 | `excluded_skills` / `probe_dedup` | unproductive-only + 探针去重 |
+| ORCH-08 | `insufficient_citation` | `min_citation_ratio` 闸门 |
+| ORCH-09 | `unexplained_sweep` / process metrics | `coverage.unexplained_errors` → `graph.py` |
+| ORCH-10 | `generic_fallback` / `skill_registry` | `SK-GENERIC-EVIDENCE-FIRST` A1 注入 |
+
+校验：
+
+```bash
+rg -n '\[ \] \*\*ORCH-' .planning/REQUIREMENTS.md   # 命中 0
+rg -n '\[x\] \*\*ORCH-' .planning/REQUIREMENTS.md   # 命中 10
+rg -n 'xfail.*ORCH|ORCH pending' tests/test_agent.py tests/test_gateway.py tests/test_eval.py  # 命中 0
+```
+
+实测：未勾选 ORCH = 0；已勾选 ORCH = 10；无残留 `xfail.*ORCH` / `ORCH pending`（仅历史注释标题「Wave 0 skeletons (xfail)」，无 `@pytest.mark.xfail`）。
