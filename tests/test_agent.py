@@ -263,7 +263,6 @@ class _FakeCompressResult:
     windows: list = field(default_factory=list)
 
 
-@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-04")
 def test_plan_stop_rejected_round1(built, tmp_path):
     """ORCH-01: round_no==1 且模型 stop=True → plan.stop_rejected，最终 stop=False。"""
 
@@ -287,8 +286,20 @@ def test_plan_stop_rejected_round1(built, tmp_path):
         assert g.metrics.counters.get("plan.stop_rejected", 0) >= 1
         assert any(e.kind == "plan.stop_rejected" for e in g.bus.since(0))
         assert plan["stop"] is False
+        assert plan["actions"], "驳回后须补非空 actions（候选或 GENERIC）"
     finally:
         g.close()
+
+    # round_no>1 时本守卫不拦截 stop=true
+    g2 = ForceStopGraph(built["db"], workspace=tmp_path / "orch01b", session_id="ORCH-01b")
+    try:
+        st2 = g2.state
+        st2.round_no = 2
+        plan2 = g2.node_plan(st2)
+        assert plan2["stop"] is True
+        assert g2.metrics.counters.get("plan.stop_rejected", 0) == 0
+    finally:
+        g2.close()
 
 
 def test_parse_json_no_cross_span_and_retry_alert(built, tmp_path):
