@@ -297,7 +297,6 @@ def test_plan_stop_rejected_round1(built, tmp_path):
         g.close()
 
 
-@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-02")
 def test_parse_json_no_cross_span_and_retry_alert(built, tmp_path):
     """ORCH-03: 禁跨段花括号假成功；围栏 JSON 成功；耗尽重试后 llm.parse_failure ALERT。"""
     from vela.agent.graph import _parse_json
