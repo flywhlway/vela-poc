@@ -50,7 +50,7 @@
 - [ ] **ORCH-07** (C-06/D4): 技能剔除策略回归 `unproductive-only`，配合探针级 `(skill_id, args_hash)` 去重；round 1 选中但验证未通过的正确技能不再被物理剔除出 round 2 候选集
 - [ ] **ORCH-08** (C-03/F-01): reporter 输出后程序化校验引用数 ≥ 证据链条目的 50%，不足则带修复提示重试一次，仍不足则降级为 `insufficient_citation` 状态（阈值先设宽再观察分布收紧，NR-4）
 - [ ] **ORCH-09** (C-22/KB L0): 报告与 unanswerable 落地前强制执行一次全局 SQL 不变量检查；存在从未被任何探针取回的错误级日志行时，禁止输出 `no_fault_found`，强制降级为 `insufficient_coverage` 并附未解释错误行 → `unexplained_error_rate ≤ 0.05`
-- [ ] **ORCH-10** (C-23/KB L1): 通用兜底技能 `SK-GENERIC-EVIDENCE-FIRST`（空关键词 + `fallback_only: true` + 无 `root_cause_label`）在候选集全零分时被注入，系统不再空手停止
+- [ ] **ORCH-10** (C-23/KB L1): 通用兜底技能 `SK-GENERIC-EVIDENCE-FIRST`（空关键词 + `fallback_only: true` + 无 `root_cause_label`）在候选集全零分**且存在 ERROR 级信号**时被注入（RESEARCH A1：健康包无 ERROR 不注入），系统不再空手停止
 
 ### DECP —— 去循环耦合与反馈闭环
 

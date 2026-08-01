@@ -344,7 +344,7 @@ def _unexplained_error_sweep(self, st: SessionState) -> dict:
 | ORCH-07 | `excluded_skills`→unproductive-only；`executed_probes` 去重过滤 actions | `state.py`, `graph.py`, `tests/test_agent.py` |
 | ORCH-10 | YAML 技能 + retrieve 排除 fallback_only + 零分/守卫注入 API | `builtin.yaml`, `skills.py`, `graph.py` |
 | ORCH-08 | report 后 `len(cites) >= ceil(0.5*len(chain))`（或 valid 引用）；不足则修复提示重试 1 次；再不足 `status=insufficient_citation` | `graph.py`, `budget.yaml`, `citations.py`（可选 helper） |
-| ORCH-09 | report/unanswerable 前 sweep；拦 `no_fault_found`；emit `coverage.unexplained_errors`；写入 case 指标供聚合 | `graph.py`, `eval/runner.py`（可选对齐）, `eval/process.py` |
+| ORCH-09 | report/unanswerable 前 sweep；拦 `no_fault_found`；emit `coverage.unexplained_errors`（含 samples[:10]）；附着 root_cause/报告；写入 case 指标供聚合 | `graph.py`, `eval/runner.py`（可选对齐）, `eval/process.py` |
 | 验收 | 真实 LLM 过程指标对照基线；mock 回归门 | `make test`, `make eval`, 可选 `pytest -m realllm` |
 
 **建议波次（供 planner）：**
@@ -380,20 +380,23 @@ def _unexplained_error_sweep(self, st: SessionState) -> dict:
 
 **非空：** A1–A2 建议 planner 写入单测表即锁定，无需再开 discuss。
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **`insufficient_citation` / `insufficient_coverage` 是 `status` 还是 `root_cause.label`？**
+1. **`insufficient_citation` / `insufficient_coverage` 是 `status` 还是 `root_cause.label`？** — RESOLVED
    - What we know: REQUIREMENTS 写「降级为 … 状态」；现有 status 枚举在 `state.py` 注释中。
    - What's unclear: eval 的 `answered` 判定与 top1 是否包含这些终态。
    - Recommendation: `status` ∈ 新值；`root_cause.label` 同步为同名或保留证据标题；runner 视作非 answered 诚实终态。
+   - **RESOLVED (03-06):** 落地为 `SessionState.status` 新值；`root_cause.label` 同步同名；`samples[:10]` 经 emit/`root_cause`/报告附着；ablation 视作非 answered 诚实终态（不计 misdiagnosis）。
 
-2. **首轮守卫驳回后无 selected_skill 时选谁？**
+2. **首轮守卫驳回后无 selected_skill 时选谁？** — RESOLVED
    - What we know: 探索文档用 `_fallback_skill(cands)` 或 GENERIC。
    - Recommendation: 优先候选最高分非 fallback 技能；若无候选或全零分 → `SK-GENERIC-EVIDENCE-FIRST`（与 ORCH-10 合流）。
+   - **RESOLVED (03-04 + 03-03):** 优先最高分非 fallback；无候选或全零分且存在 ERROR 信号（A1）→ 注入 `SK-GENERIC-EVIDENCE-FIRST`。
 
-3. **真实 LLM 验收是否强制本阶段跑满 `--no-cache` N 次？**
+3. **真实 LLM 验收是否强制本阶段跑满 `--no-cache` N 次？** — RESOLVED
    - What we know: ADR-4 说过程指标无需统计前置；回归门是 mock 177+仿真。
    - Recommendation: mock 单测 + 全量测试为合并门；另设可选 realllm 过程指标抽检对照 baseline，不阻断（除非 premature/parse/trunc 在抽检中仍远超标）。
+   - **RESOLVED (03-07):** 合并门 = `make test` + mock `make eval`（回归=0）；realllm 抽检可选、非阻断。
 
 ## Environment Availability
 
@@ -438,8 +441,8 @@ Step 2.6: 已审计 — 纯代码/配置阶段，无新外部服务。
 | ORCH-06 | claims[0].claim 含根因假设而非 raw_line 自身循环 | unit | `pytest tests/test_agent.py -k verify_claim_hypothesis -q` | ❌ Wave 0 |
 | ORCH-07 | excluded==unproductive only；同 skill 不同 args 可再跑；同 args 被去重 | unit | `pytest tests/test_agent.py -k 'excluded_skills or probe_dedup' -q` | ⚠️ 旧测须改写 |
 | ORCH-08 | 引用不足→重试；仍不足→`insufficient_citation` | unit | `pytest tests/test_agent.py -k insufficient_citation -q` | ❌ Wave 0 |
-| ORCH-09 | pool 无错误但库有 ERROR → 禁 no_fault_found，→ insufficient_coverage | unit/int | `pytest tests/test_agent.py -k unexplained_sweep -q` | ❌ Wave 0 |
-| ORCH-10 | fallback_only 不出现在常规 retrieve；全零分时注入 GENERIC | unit | `pytest tests/test_agent.py -k generic_fallback -q` | ❌ Wave 0 |
+| ORCH-09 | pool 无错误但库有 ERROR → 禁 no_fault_found，→ insufficient_coverage + samples[:10] 非空 | unit/int | `pytest tests/test_agent.py -k unexplained_sweep -q` | ❌ Wave 0 |
+| ORCH-10 | fallback_only 不出现在常规 retrieve；A1：全零分 AND ERROR 才注入 GENERIC | unit | `pytest tests/test_agent.py -k generic_fallback -q` | ❌ Wave 0 |
 | 过程指标 | 真实事件优先；目标阈值达标（集成/eval） | unit + eval | `pytest tests/test_eval.py -k process_metric -q` | ✅ 部分存在 |
 | 回归门 | 177+ 全绿；仿真回归 0 | suite | `make test` + `make eval`（mock） | ✅ |
 
@@ -519,8 +522,7 @@ Step 2.6: 已审计 — 纯代码/配置阶段，无新外部服务。
 - Phase 2 `02-RESEARCH.md` 过程指标代理口径决议
 
 ### Tertiary (LOW confidence)
-- A1 健康包注入谓词细节（待单测钉死）
-- 真实 LLM 抽检是否纳入 phase gate（Open Q3）
+- （无）A1 已由 03-03 单测钉死；Open Q3 已由 03-07 定为 mock 门 + 可选 realllm
 
 ## Metadata
 
