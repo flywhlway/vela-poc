@@ -272,3 +272,54 @@ def test_render_includes_process_footnote_when_present():
     assert "premature_stop_rate" in md
     assert "决策轨迹" in md
     assert "代理口径" in md or "Phase 5" in md
+
+
+# --------------------------------------------------------------------- ORCH Wave 0 skeletons (xfail)
+@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-06")
+def test_process_metrics_prefer_real_parse_and_truncation_events():
+    """过程指标优先计真实 llm.parse_failure / llm.truncation；脚注不再含 Phase 3 前偏高。"""
+    from vela.eval.process import PROXY_FOOTNOTE, aggregate_process_metrics
+
+    cases = [{
+        "case_id": "C-REAL",
+        "healthy": False,
+        "events": [
+            # 代理可触发的空 plan.done
+            {"kind": "plan.done", "round_no": 1,
+             "payload": {"skill": None, "stop": False, "actions": []}},
+            {"kind": "llm.parse_failure", "round_no": 1, "payload": {"retries": 2}},
+            {"kind": "llm.truncation", "round_no": 1, "payload": {"logical": "planner"}},
+        ],
+        "rounds": [{"round_no": 1, "selected_skill": None, "actions": [], "productive": False}],
+        # audit 无 length —— 截断率应仍由真实事件贡献
+        "audit": [{"finish_reason": "stop"}],
+        "report_md": "x",
+        "citation_coverage": 1.0,
+        "unexplained_error_rate": 0.0,
+    }]
+    m = aggregate_process_metrics(cases)
+    assert m["llm_parse_failure_rate"] == 1.0
+    assert m["llm_truncation_rate"] == 1.0
+    assert "Phase 3 前允许偏高" not in PROXY_FOOTNOTE
+    assert "Phase 3 前允许偏高" not in str(m.get("_footnote") or "")
+
+
+@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-06")
+def test_ablation_excludes_insufficient_statuses_from_misdiagnosis():
+    """insufficient_citation / insufficient_coverage 不计入 misdiagnosis 分子。"""
+    from vela.eval import process as proc
+    from vela.eval.process import aggregate_ablation_metrics
+
+    excluded = set(getattr(proc, "MISDIAGNOSIS_EXCLUDED_STATUSES", ()))
+    assert {"insufficient_citation", "insufficient_coverage"} <= excluded
+
+    abl = aggregate_ablation_metrics([
+        {"healthy": False, "status": "insufficient_citation", "predicted_label": "wrong",
+         "expected_label": "right", "top1_hit": False},
+        {"healthy": False, "status": "insufficient_coverage", "predicted_label": "wrong",
+         "expected_label": "right", "top1_hit": False},
+        {"healthy": False, "status": "answered", "predicted_label": "wrong",
+         "expected_label": "right", "top1_hit": False},
+    ])
+    # 分子仅含 answered 误诊；insufficient_* 已由 MISDIAGNOSIS_EXCLUDED_STATUSES 声明排除
+    assert abl["misdiagnosis_rate_under_ablation"] == pytest.approx(1 / 3, abs=1e-4)
