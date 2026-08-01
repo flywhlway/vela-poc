@@ -71,7 +71,7 @@ completed: 2026-08-01
 3. **Task 2 RED: verdict_norm 契约** - `844e74a` (test)
 4. **Task 2 GREEN: ORCH-05 归一化与 partial** - `e5cd337` (feat)
 
-**Plan metadata:** _(pending final docs commit)_
+**Plan metadata:** `1025daa` (docs: complete plan)
 
 ## Files Created/Modified
 
