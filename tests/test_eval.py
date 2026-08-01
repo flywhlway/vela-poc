@@ -275,7 +275,6 @@ def test_render_includes_process_footnote_when_present():
 
 
 # --------------------------------------------------------------------- ORCH Wave 0 skeletons (xfail)
-@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-06")
 def test_process_metrics_prefer_real_parse_and_truncation_events():
     """过程指标优先计真实 llm.parse_failure / llm.truncation；脚注不再含 Phase 3 前偏高。"""
     from vela.eval.process import PROXY_FOOTNOTE, aggregate_process_metrics
@@ -304,7 +303,6 @@ def test_process_metrics_prefer_real_parse_and_truncation_events():
     assert "Phase 3 前允许偏高" not in str(m.get("_footnote") or "")
 
 
-@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-06")
 def test_ablation_excludes_insufficient_statuses_from_misdiagnosis():
     """insufficient_citation / insufficient_coverage 不计入 misdiagnosis 分子。"""
     from vela.eval import process as proc
