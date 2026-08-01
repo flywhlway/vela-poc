@@ -339,7 +339,6 @@ def test_planner_system_distinguishes_stop_vs_inconclusive():
     ), "提示词须区分停止调查与无法定论 / 禁止无证据即 stop"
 
 
-@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-02")
 def test_llm_yaml_planner_verifier_max_tokens_2048():
     """ORCH-04: planner/verifier max_tokens == 2048。"""
     from vela.config import load_yaml
@@ -347,12 +346,14 @@ def test_llm_yaml_planner_verifier_max_tokens_2048():
     models = cfg["logical_models"]
     assert models["planner"]["max_tokens"] == 2048
     assert models["verifier"]["max_tokens"] == 2048
+    assert models["reporter"]["max_tokens"] == 2048
+    assert models["reporter"]["max_tokens"] != 4096
 
 
-@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-02")
-def test_truncation_finish_reason_length_counted(tmp_path):
-    """ORCH-04: finish_reason==length 路径递增 truncation 指标或 truncation_alerted。"""
-    from vela.gateway.base import LLMGateway, LLMRequest, LLMResponse
+def test_truncation_finish_reason_length_counted(built, tmp_path):
+    """ORCH-04: finish_reason==length 时 graph 包装层 emit llm.truncation + metrics。"""
+    from vela.agent.graph import AgentGraph
+    from vela.gateway.base import LLMResponse
     from vela.gateway.mock import MockProvider
 
     class LengthProvider(MockProvider):
@@ -371,13 +372,14 @@ def test_truncation_finish_reason_length_counted(tmp_path):
                 raw=r.raw,
             )
 
-    gw = LLMGateway(LengthProvider({}, name="mock"), session_id="TRUNC-ORCH",
-                    audit_path=tmp_path / "trunc_audit.jsonl")
-    gw.ledger.start_round()
-    gw.chat(LLMRequest(logical_model="planner", system="s", user="hello trunc"))
-    hist = gw.history[-1]
-    assert hist.get("finish_reason") == "length"
-    # 仅记录 finish_reason 不够：必须有显式 truncation 告警/计数
-    trunc_metric = getattr(gw, "truncation_count", 0)
-    trunc_flag = bool(hist.get("truncation_alerted"))
-    assert trunc_metric >= 1 or trunc_flag
+    g = AgentGraph(built["db"], workspace=tmp_path / "orch04", session_id="ORCH-04")
+    try:
+        g.gw.provider = LengthProvider({}, name="mock")
+        g.ledger.start_round()
+        g._llm("planner", "s", "hello trunc")
+        assert g.metrics.counters.get("llm.truncation", 0) >= 1
+        assert any(e.kind == "llm.truncation" for e in g.bus.since(0))
+        hist = g.gw.history[-1]
+        assert hist.get("finish_reason") == "length"
+    finally:
+        g.close()
