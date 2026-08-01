@@ -106,7 +106,35 @@ Plans:
   - 现有 177 个测试全部通过
   - 仿真基准已通过用例回归数 = 0（一票否决）
 
-**Plans**: TBD
+**Plans**: 7 plans（6 波次）
+
+**Wave 0**
+
+- [ ] 03-01-PLAN.md — Wave 0 单测骨架（ORCH-01..10 xfail 契约）
+
+**Wave 1** *(blocked on Wave 0)*
+
+- [ ] 03-02-PLAN.md — LLM 输出契约：_llm_json / 禁跨段解析 / max_tokens=2048 / truncation（ORCH-03/04）
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 03-03-PLAN.md — 技能剔除 unproductive-only + 探针去重 + GENERIC 零分注入（ORCH-07/10）
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 03-04-PLAN.md — 首轮 stop 守卫 + PLANNER 规则 5 重写（ORCH-01/02）
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 03-05-PLAN.md — verifier 判据归一化 + claim 根因假设（ORCH-05/06）
+
+**Wave 5** *(blocked on Wave 4)*
+
+- [ ] 03-06-PLAN.md — 引用比例闸门 + 未解释错误哨兵 + 过程指标真实事件口径（ORCH-08/09）
+
+**Wave 6** *(blocked on Wave 5)*
+
+- [ ] 03-07-PLAN.md — 回归门（make test + mock eval 回归 0）并勾选 ORCH-01..10
 
 ### Phase 4: 去循环耦合与反馈闭环
 
@@ -177,7 +205,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. 真实 LLM 环境就绪 | 8/8 | Complete    | 2026-07-31 |
 | 2. 度量可信与真实基线 | 6/6 | Complete    | 2026-08-01 |
-| 3. 编排层逻辑止血 | 0/TBD | Not started | - |
+| 3. 编排层逻辑止血 | 0/7 | Planned | - |
 | 4. 去循环耦合与反馈闭环 | 0/TBD | Not started | - |
 | 5. 置信度分级与技能治理 | 0/TBD | Not started | - |
 | 6. 双驱动架构：证据通道与仲裁器 | 0/TBD | Not started | - |

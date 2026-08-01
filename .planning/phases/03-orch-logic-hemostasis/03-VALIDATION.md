@@ -38,30 +38,30 @@ created: 2026-08-01
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 03-W0-* | 00 | 0 | ORCH-01..10 | — | N/A | unit stubs | `pytest tests/test_agent.py -k 'stop_rejected or parse_json or verdict' -q` | ❌ W0 | ⬜ pending |
-| 03-*-* | TBD | 1+ | ORCH-01 | T-3-01 | 首轮 stop 程序化驳回 | unit | `pytest tests/test_agent.py -k stop_rejected -q` | ❌ W0 | ⬜ pending |
-| 03-*-* | TBD | 1+ | ORCH-02 | T-3-01 | PLANNER_SYSTEM 禁止无证据 stop | unit | `pytest tests/test_gateway.py -k planner_system -q` | ❌ W0 | ⬜ pending |
-| 03-*-* | TBD | 1+ | ORCH-03 | T-3-02 | 解析失败重试+ALERT；禁跨段假成功 | unit | `pytest tests/test_agent.py -k parse_json -q` | ❌ W0 | ⬜ pending |
-| 03-*-* | TBD | 1+ | ORCH-04 | T-3-02 | max_tokens=2048；length→truncation | unit | `pytest tests/test_gateway.py -k 'max_tokens or truncation' -q` | ❌ W0 | ⬜ pending |
-| 03-*-* | TBD | 1+ | ORCH-05 | T-3-03 | verdict 归一化；partial 可推进 | unit | `pytest tests/test_agent.py -k verdict_norm -q` | ❌ W0 | ⬜ pending |
-| 03-*-* | TBD | 1+ | ORCH-06 | T-3-03 | claim=根因假设非 raw_line 自证 | unit | `pytest tests/test_agent.py -k verify_claim_hypothesis -q` | ❌ W0 | ⬜ pending |
-| 03-*-* | TBD | 1+ | ORCH-07 | T-3-01 | unproductive-only + probe dedup | unit | `pytest tests/test_agent.py -k 'excluded_skills or probe_dedup' -q` | ⚠️ rewrite | ⬜ pending |
-| 03-*-* | TBD | 1+ | ORCH-08 | T-3-04 | 引用不足重试→insufficient_citation | unit | `pytest tests/test_agent.py -k insufficient_citation -q` | ❌ W0 | ⬜ pending |
-| 03-*-* | TBD | 1+ | ORCH-09 | T-3-05 | 未解释 ERROR→禁 no_fault_found | unit/int | `pytest tests/test_agent.py -k unexplained_sweep -q` | ❌ W0 | ⬜ pending |
-| 03-*-* | TBD | 1+ | ORCH-10 | — | 全零分注入 SK-GENERIC-EVIDENCE-FIRST | unit | `pytest tests/test_agent.py -k generic_fallback -q` | ❌ W0 | ⬜ pending |
-| 03-*-* | TBD | last | 回归门 | — | 177+ 绿；仿真回归 0 | suite | `make test` + mock `make eval` | ✅ | ⬜ pending |
+| 03-01-01 | 01 | 0 | ORCH-01..10 | T-03-00 | Wave 0 骨架可收集 | unit stubs | `pytest tests/test_agent.py tests/test_gateway.py -q --collect-only` | ❌→Plan01 | ⬜ pending |
+| 03-01-02 | 01 | 0 | process | — | 真实事件优先骨架 | unit stubs | `pytest tests/test_eval.py -k 'process_metrics_prefer or ablation_excludes_insufficient' -q` | ❌→Plan01 | ⬜ pending |
+| 03-02-01 | 02 | 1 | ORCH-03 | T-03-02 | 解析失败重试+ALERT；禁跨段假成功 | unit | `pytest tests/test_agent.py -k parse_json -q` | ❌ W0 | ⬜ pending |
+| 03-02-02 | 02 | 1 | ORCH-04 | T-03-02 | max_tokens=2048；length→truncation | unit | `pytest tests/test_gateway.py tests/test_agent.py -k 'max_tokens or truncation' -q` | ❌ W0 | ⬜ pending |
+| 03-03-01 | 03 | 2 | ORCH-07 | T-03-01a | unproductive-only + probe dedup | unit | `pytest tests/test_agent.py -k 'excluded_skills or probe_dedup' -q` | ⚠️ rewrite | ⬜ pending |
+| 03-03-02 | 03 | 2 | ORCH-10 | T-03-10 | 全零分注入 SK-GENERIC-EVIDENCE-FIRST | unit | `pytest tests/test_agent.py -k 'generic_fallback or skill_registry' -q` | ❌ W0 | ⬜ pending |
+| 03-04-01 | 04 | 3 | ORCH-02 | T-03-01b | PLANNER_SYSTEM 禁止无证据 stop | unit | `pytest tests/test_gateway.py -k planner_system -q` | ❌ W0 | ⬜ pending |
+| 03-04-02 | 04 | 3 | ORCH-01 | T-03-01 | 首轮 stop 程序化驳回 | unit | `pytest tests/test_agent.py -k stop_rejected -q` | ❌ W0 | ⬜ pending |
+| 03-05-01 | 05 | 4 | ORCH-06 | T-03-03b | claim=根因假设非 raw_line 自证 | unit | `pytest tests/test_agent.py -k verify_claim_hypothesis -q` | ❌ W0 | ⬜ pending |
+| 03-05-02 | 05 | 4 | ORCH-05 | T-03-03 | verdict 归一化；partial 可推进 | unit | `pytest tests/test_agent.py -k verdict_norm -q` | ❌ W0 | ⬜ pending |
+| 03-06-01 | 06 | 5 | ORCH-08 | T-03-04 | 引用不足重试→insufficient_citation | unit | `pytest tests/test_agent.py -k insufficient_citation -q` | ❌ W0 | ⬜ pending |
+| 03-06-02 | 06 | 5 | ORCH-09 | T-03-05 | 未解释 ERROR→禁 no_fault_found | unit | `pytest tests/test_agent.py tests/test_eval.py -k 'unexplained_sweep or process_metrics_prefer or ablation_excludes_insufficient' -q` | ❌ W0 | ⬜ pending |
+| 03-07-01 | 07 | 6 | 回归门 | T-03-07 | 全量绿；仿真回归 0 | suite | `make test` + mock `make eval` | ✅ | ⬜ pending |
+| 03-07-02 | 07 | 6 | ORCH-01..10 | T-03-07 | REQUIREMENTS 勾选闭环 | docs | `rg '\[ \] \*\*ORCH-' .planning/REQUIREMENTS.md` 无命中 | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
-
-*Plan/Task IDs 由 planner 落地后回填；上表 Requirement→Command 映射锁定。*
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `tests/test_agent.py` — stubs：stop_rejected / parse_json / verdict_norm / claim_hypothesis / excluded 改写 / probe_dedup / citation_ratio / unexplained_sweep / generic_fallback
-- [ ] `tests/test_gateway.py` — max_tokens 配置断言 / truncation 计数
-- [ ] `tests/test_eval.py` — 过程指标消费真实事件（`llm.parse_failure` 等）
+- [ ] `tests/test_agent.py` — stubs：stop_rejected / parse_json / verdict_norm / claim_hypothesis / excluded 改写 / probe_dedup / citation_ratio / unexplained_sweep / generic_fallback（Plan 03-01）
+- [ ] `tests/test_gateway.py` — max_tokens 配置断言 / truncation 计数 / planner_system（Plan 03-01）
+- [ ] `tests/test_eval.py` — 过程指标消费真实事件（Plan 03-01 骨架 → Plan 03-06 转绿）
 - [ ] （可选）最小 fixture DB：含 ERROR 行但 evidence_pool 为空，供 ORCH-09
 
 *Existing pytest 基础设施可跑；ORCH 专用用例大多缺失 → Wave 0 必做。*
