@@ -89,11 +89,12 @@ def test_load_budget_poc_is_smaller_than_production():
     assert poc.max_rounds < prod.max_rounds
 
 
-def test_load_skills_returns_12_sorted_by_id():
+def test_load_skills_returns_13_sorted_by_id():
     skills = load_skills()
     ids = [s["id"] for s in skills]
-    assert len(skills) == 12
+    assert len(skills) == 13
     assert ids == sorted(ids)
+    assert "SK-GENERIC-EVIDENCE-FIRST" in ids
 
 
 def test_config_hash_is_deterministic_and_stable_format():

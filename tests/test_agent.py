@@ -23,10 +23,11 @@ from vela.gateway.prompts import extract_state
 
 
 # --------------------------------------------------------------------- skills
-def test_skill_registry_loads_all_12():
+def test_skill_registry_loads_all_13():
     reg = SkillRegistry()
-    assert len(reg.skills) == 12
+    assert len(reg.skills) == 13
     assert reg.label_of("SK-UDS-NRC") == "uds_nrc_programming_failure"
+    assert "SK-GENERIC-EVIDENCE-FIRST" in reg.by_id
 
 
 def test_retrieve_prioritizes_lexical_match_for_rare_keyword():
@@ -505,9 +506,8 @@ def test_unexplained_sweep_blocks_no_fault_found(built, tmp_path):
         g.close()
 
 
-@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-03")
 def test_generic_fallback_zero_score_inject(built, built_healthy, tmp_path):
-    """ORCH-10: fallback_only 不进常规 retrieve；全零分+ERROR 注入 GENERIC；健康无 ERROR 不注入。"""
+    """ORCH-10 A1: fallback_only 不进常规 retrieve；全零分+ERROR 注入；健康无 ERROR 不注入。"""
     reg = SkillRegistry()
     generic = next((s for s in reg.skills if s["id"] == "SK-GENERIC-EVIDENCE-FIRST"), None)
     assert generic is not None
@@ -527,11 +527,12 @@ def test_generic_fallback_zero_score_inject(built, built_healthy, tmp_path):
                 })
             return "{}"
 
+    # A1 正例：跳过 birdseye；空召回信号 ⇒ 词面全零；levels 含 ERROR ⇒ 注入
     g_err = ZeroScoreGraph(built["db"], workspace=tmp_path / "orch10e", session_id="ORCH-10E")
     try:
         st = g_err.state
-        st.round_no = 1
-        st.signals = {"abort_reason": "UDS_NRC_0x72", "fail_phase": "FLASH"}
+        st.round_no = 2
+        st.signals = {"levels": {"ERROR": 8, "INFO": 40}}
         plan = g_err.node_plan(st)
         actions = plan.get("actions") or []
         skill = plan.get("skill")
@@ -544,13 +545,17 @@ def test_generic_fallback_zero_score_inject(built, built_healthy, tmp_path):
     finally:
         g_err.close()
 
+    # A1 反例：全零分但无 ERROR（健康包）→ 不注入
     g_ok = ZeroScoreGraph(built_healthy["db"], workspace=tmp_path / "orch10h",
                           session_id="ORCH-10H")
     try:
         st = g_ok.state
-        st.round_no = 1
-        st.signals = {}
+        st.round_no = 2
+        st.signals = {"levels": {"INFO": 50, "WARN": 2}}
         plan = g_ok.node_plan(st)
         assert plan.get("skill") != "SK-GENERIC-EVIDENCE-FIRST"
+        assert not any(
+            a.get("tool") in generic_probes for a in (plan.get("actions") or [])
+        ), "健康无 ERROR 时不应注入 GENERIC probes"
     finally:
         g_ok.close()
