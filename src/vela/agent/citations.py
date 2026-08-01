@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import dataclass, field
 
@@ -80,6 +81,13 @@ def extract_citations(text: str) -> list[str]:
         except json.JSONDecodeError:
             pass
     return out
+
+
+def citation_ratio_ok(text: str, chain_len: int, min_ratio: float) -> bool:
+    """ORCH-08：有效引用数 ≥ ceil(min_ratio * chain_len)；空链视为通过。"""
+    if chain_len <= 0:
+        return True
+    return len(extract_citations(text)) >= math.ceil(float(min_ratio) * chain_len)
 
 
 def verify_citations(text: str, evidence_hashes: list[str], api=None) -> CitationReport:

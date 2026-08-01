@@ -33,7 +33,7 @@ class SessionState:
     question: str = "本次 OTA 升级为何失败？请给出根因与证据链。"
     started_at: str = field(default_factory=lambda: iso(datetime.now(UTC)))
     round_no: int = 0
-    status: str = "running"          # running | answered | human_gate | unanswerable | budget_exhausted
+    status: str = "running"          # running | answered | human_gate | unanswerable | budget_exhausted | insufficient_citation | insufficient_coverage
     signals: dict = field(default_factory=dict)
     evidence_digest: list[str] = field(default_factory=list)
     seen_row_hashes: list[str] = field(default_factory=list)

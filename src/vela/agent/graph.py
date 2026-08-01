@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import time
 from dataclasses import dataclass, field
@@ -23,7 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from vela.agent.checkpoint import CheckpointStore
-from vela.agent.citations import strip_dangling, verify_citations
+from vela.agent.citations import citation_ratio_ok, extract_citations, strip_dangling, verify_citations
 from vela.agent.compress import EvidenceCompressor
 from vela.agent.skills import FALLBACK_SKILL_ID, SkillRegistry
 from vela.agent.state import RoundRecord, SessionState
@@ -370,10 +371,37 @@ class AgentGraph:
         rep = verify_citations(text, [c["row_hash"] for c in chain], api=self.api)
         if rep.dangling:
             text = strip_dangling(text, rep.dangling)
-            payload = {"dangling": rep.dangling}
+            dpay = {"dangling": rep.dangling}
             if rep.dangling_rate is not None:
-                payload["rate"] = rep.dangling_rate
-            self.bus.emit("report.dangling_citation", Severity.ALERT, st.round_no, **payload)
+                dpay["rate"] = rep.dangling_rate
+            self.bus.emit("report.dangling_citation", Severity.ALERT, st.round_no, **dpay)
+
+        # ORCH-08：引用比例闸门（阈值来自 budget.yaml，禁止硬编码字面量）
+        report_cfg = (load_yaml("budget.yaml") or {}).get("report") or {}
+        min_ratio = float(report_cfg["min_citation_ratio"])
+        chain_len = len(chain)
+        if chain_len and not citation_ratio_ok(text, chain_len, min_ratio):
+            need = math.ceil(min_ratio * chain_len)
+            fix_hint = (
+                f"\n\n【引用修复】上次报告有效引用不足："
+                f"需要至少 {need} 个 [[EV:row_hash]]（证据链 {chain_len} 条，"
+                f"比例 ≥ {min_ratio}）。请在事实句中补齐真实证据引用后重写。"
+            )
+            text = self._llm("reporter", REPORTER_SYSTEM, reporter_user(payload) + fix_hint)
+            rep = verify_citations(text, [c["row_hash"] for c in chain], api=self.api)
+            if rep.dangling:
+                text = strip_dangling(text, rep.dangling)
+            if not citation_ratio_ok(text, chain_len, min_ratio):
+                st.status = "insufficient_citation"
+                if rc.get("label") not in ("insufficient_coverage",):
+                    rc = {**rc, "label": "insufficient_citation"}
+                self.bus.emit(
+                    "report.insufficient_citation", Severity.ALERT, st.round_no,
+                    citations=len(extract_citations(text)), chain_len=chain_len,
+                    min_ratio=min_ratio, required=need,
+                )
+                self.metrics.inc("report.insufficient_citation")
+
         st.root_cause = rc
         st.report_md = text
         st.citation_check = rep.to_dict()
@@ -449,7 +477,8 @@ class AgentGraph:
                     self.ckpt.save(st)
                     if st.evidence_pool:
                         self.node_report(st, _last_productive_skill(st))
-                        st.status = "answered"
+                        if st.status == "running":
+                            st.status = "answered"
                     else:
                         self.node_unanswerable(
                             st, plan.get("reason") or "编排器判定无可用假设，且尚未获得任何证据。")
@@ -483,7 +512,8 @@ class AgentGraph:
 
                 if ver["decisive"] and rec.productive:
                     self.node_report(st, plan["skill"])
-                    st.status = "answered"
+                    if st.status == "running":
+                        st.status = "answered"
                     break
                 if st.consecutive_barren_rounds >= 2:
                     self.node_human_gate(
@@ -492,15 +522,17 @@ class AgentGraph:
                     # 转人工不等于扣留已有发现：仍输出阶段性结论与证据链，供人工接手
                     if st.evidence_pool:
                         self.node_report(st, _last_productive_skill(st))
-                        st.status = "human_gate"
+                        if st.status not in ("insufficient_citation", "insufficient_coverage"):
+                            st.status = "human_gate"
                     break
             else:
                 if st.status == "running":
-                    st.status = "budget_exhausted"
                     if st.evidence_pool:
                         self.node_report(st, _last_productive_skill(st))
-                        st.status = "answered"
+                        if st.status == "running":
+                            st.status = "answered"
                     else:
+                        st.status = "budget_exhausted"
                         self.node_unanswerable(st, f"达到最大轮次上限 {limit}，仍未获得决定性证据。")
         except BudgetExceeded as e:
             self.node_unanswerable(st, f"预算硬切断：{e}")
