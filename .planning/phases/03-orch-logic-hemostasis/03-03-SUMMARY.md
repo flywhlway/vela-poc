@@ -75,7 +75,7 @@ completed: 2026-08-01
 3. **Task 2 RED: GENERIC A1 契约 + 技能数 13** - `297bfb9` (test)
 4. **Task 2 GREEN: SK-GENERIC-EVIDENCE-FIRST + A1 注入** - `f0d4829` (feat)
 
-**Plan metadata:** _(pending final docs commit)_
+**Plan metadata:** `d5456d7` (docs: complete plan)
 
 ## Files Created/Modified
 
