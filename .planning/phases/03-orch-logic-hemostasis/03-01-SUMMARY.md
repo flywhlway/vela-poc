@@ -68,7 +68,7 @@ completed: 2026-08-01
 1. **Task 1: 写入 ORCH agent/gateway 单测骨架（xfail）** - `b859628` (test)
 2. **Task 2: 写入过程指标真实事件优先骨架（xfail）** - `b8f3778` (test)
 
-**Plan metadata:** （见 final docs commit）
+**Plan metadata:** `250ffa1` (docs: complete plan)
 
 ## Files Created/Modified
 
