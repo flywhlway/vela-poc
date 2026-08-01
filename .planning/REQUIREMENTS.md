@@ -45,8 +45,8 @@
 - [x] **ORCH-02** (C-05/D1): 提示词第 5 条重写，明确区分「停止调查」与「无法定论」，不再诱导模型在证据池结构上必然为空的首轮选择 `stop=true`
 - [x] **ORCH-03** (C-09/D5/F-07): `_parse_json` 优先信任 `json_mode` 结构化结果、禁止跨段花括号提取、解析失败显式重试 2 次并计入指标与 ALERT 事件 → `llm_parse_failure_rate ≤ 0.02`
 - [x] **ORCH-04** (C-10/D6): `planner`/`verifier` 的 `max_tokens` 上调至 2048，且 `finish_reason == "length"` 触发截断告警 → `llm_truncation_rate ≤ 0.02`
-- [ ] **ORCH-05** (C-07/D3): verifier 判据归一化为枚举匹配（大小写与变体不再落空）且允许 `partial` 推进流程 → `verdict_supported_ratio ≥ 0.6`
-- [ ] **ORCH-06** (C-08/D3): verifier 的 claim 重构为**根因假设**而非日志原文，消除「判断这行日志是否支撑它自己」的同义反复，支持多条证据支撑单个假设
+- [x] **ORCH-05** (C-07/D3): verifier 判据归一化为枚举匹配（大小写与变体不再落空）且允许 `partial` 推进流程 → `verdict_supported_ratio ≥ 0.6`
+- [x] **ORCH-06** (C-08/D3): verifier 的 claim 重构为**根因假设**而非日志原文，消除「判断这行日志是否支撑它自己」的同义反复，支持多条证据支撑单个假设
 - [x] **ORCH-07** (C-06/D4): 技能剔除策略回归 `unproductive-only`，配合探针级 `(skill_id, args_hash)` 去重；round 1 选中但验证未通过的正确技能不再被物理剔除出 round 2 候选集
 - [ ] **ORCH-08** (C-03/F-01): reporter 输出后程序化校验引用数 ≥ 证据链条目的 50%，不足则带修复提示重试一次，仍不足则降级为 `insufficient_citation` 状态（阈值先设宽再观察分布收紧，NR-4）
 - [ ] **ORCH-09** (C-22/KB L0): 报告与 unanswerable 落地前强制执行一次全局 SQL 不变量检查；存在从未被任何探针取回的错误级日志行时，禁止输出 `no_fault_found`，强制降级为 `insufficient_coverage` 并附未解释错误行 → `unexplained_error_rate ≤ 0.05`
@@ -187,8 +187,8 @@
 | ORCH-02 | Phase 3 | Complete |
 | ORCH-03 | Phase 3 | Complete |
 | ORCH-04 | Phase 3 | Complete |
-| ORCH-05 | Phase 3 | Pending |
-| ORCH-06 | Phase 3 | Pending |
+| ORCH-05 | Phase 3 | Complete |
+| ORCH-06 | Phase 3 | Complete |
 | ORCH-07 | Phase 3 | Complete |
 | ORCH-08 | Phase 3 | Pending |
 | ORCH-09 | Phase 3 | Pending |

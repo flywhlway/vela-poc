@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: 真实 LLM 生产级可信化与双驱动架构升级
 status: executing
-stopped_at: Completed 03-04-PLAN.md
-last_updated: "2026-08-01T06:10:57.469Z"
+stopped_at: Completed 03-05-PLAN.md
+last_updated: "2026-08-01T06:14:23.814Z"
 last_activity: 2026-08-01
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 21
-  completed_plans: 18
+  completed_plans: 19
   percent: 33
 ---
 
@@ -19,12 +19,12 @@ progress:
 ## Current Position
 
 Phase: 3
-Plan: 5 of 7
+Plan: 6 of 7
 Status: Ready to execute
 Last activity: 2026-08-01
 Total Plans in Phase: 7
 
-**Progress:** [█████████░] 86%
+**Progress:** [█████████░] 90%
 
 ## Performance Metrics
 
@@ -42,6 +42,7 @@ Total Plans in Phase: 7
 | Phase 03 P02 | 3min | 2 tasks | 4 files |
 | Phase 03 P03 | 4min | 2 tasks | 6 files |
 | Phase 03 P04 | 2min | 2 tasks | 4 files |
+| Phase 03 P05 | 2min | 2 tasks | 4 files |
 
 ## Decisions
 
@@ -74,9 +75,12 @@ Total Plans in Phase: 7
 - [Phase 03]: 探针去重键={skill_id}:blake2b(canonical_json(args),8)（ORCH-07）
 - [Phase 03]: 驳回后无有效 selected_skill：取 retrieve 候选首项（已排除 fallback_only），再否则 GENERIC（03-04）
 - [Phase 03]: 首轮 stop 守卫置于 A1 GENERIC 注入之后、探针去重之前（03-04）
+- [Phase 03]: 默认构造 1 条根因假设 claim（技能 title/label/summary），citations 挂全部错误级证据 row_hash
+- [Phase 03]: weak 不计入 _OK/partial；mock 原 weak 路径改为 partial，避免评测分叉
+- [Phase 03]: verify.done 的 supported 计数仅含归一化后的 supported（partial 不进分子）
 
 ## Session
 
-Last session: 2026-08-01T06:10:57.463Z
-Stopped at: Completed 03-04-PLAN.md
+Last session: 2026-08-01T06:14:23.808Z
+Stopped at: Completed 03-05-PLAN.md
 Resume file: None

@@ -126,7 +126,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3)*
 
-- [ ] 03-05-PLAN.md — verifier 判据归一化 + claim 根因假设（ORCH-05/06）
+- [x] 03-05-PLAN.md — verifier 判据归一化 + claim 根因假设（ORCH-05/06）
 
 **Wave 5** *(blocked on Wave 4)*
 
@@ -205,7 +205,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. 真实 LLM 环境就绪 | 8/8 | Complete    | 2026-07-31 |
 | 2. 度量可信与真实基线 | 6/6 | Complete    | 2026-08-01 |
-| 3. 编排层逻辑止血 | 4/7 | In Progress|  |
+| 3. 编排层逻辑止血 | 5/7 | In Progress|  |
 | 4. 去循环耦合与反馈闭环 | 0/TBD | Not started | - |
 | 5. 置信度分级与技能治理 | 0/TBD | Not started | - |
 | 6. 双驱动架构：证据通道与仲裁器 | 0/TBD | Not started | - |
