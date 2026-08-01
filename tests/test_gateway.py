@@ -326,8 +326,7 @@ def test_token_budget_hard_cut_still_raises():
         ledger.precheck(ledger.budget.round_llm_tokens + 1)
 
 
-# --------------------------------------------------------------------- ORCH Wave 0 skeletons (xfail)
-@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-04")
+# --------------------------------------------------------------------- ORCH Wave 0 skeletons
 def test_planner_system_distinguishes_stop_vs_inconclusive():
     """ORCH-02: PLANNER_SYSTEM 区分停止调查与无法定论；禁止因尚无证据而 stop。"""
     assert "证据不足时输出 stop=true" not in PLANNER_SYSTEM
