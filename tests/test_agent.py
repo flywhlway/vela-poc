@@ -60,13 +60,6 @@ def test_state_mark_seen_returns_only_new_hashes():
     assert st.seen == {"a", "b", "c"}
 
 
-def test_excluded_skills_includes_used_and_unproductive():
-    st = SessionState(session_id="s1", db_path="x")
-    st.used_skills = ["SK-A"]
-    st.unproductive_skills = ["SK-B"]
-    assert st.excluded_skills() == ["SK-A", "SK-B"]
-
-
 def test_state_roundtrip_to_from_dict():
     st = SessionState(session_id="s1", db_path="x")
     st.mark_seen(["h1"])
@@ -403,18 +396,17 @@ def test_verify_claim_hypothesis_not_raw_line_loop(built, tmp_path):
         g.close()
 
 
-@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-03")
 def test_excluded_skills_unproductive_only():
     """ORCH-07: excluded_skills 仅含 unproductive，used 可复用。"""
     st = SessionState(session_id="s1", db_path="x")
     st.used_skills = ["SK-A"]
     st.unproductive_skills = ["SK-B"]
     assert st.excluded_skills() == ["SK-B"]
+    assert "SK-A" not in st.excluded_skills()
 
 
-@pytest.mark.xfail(strict=True, reason="ORCH pending plan 03-03")
 def test_probe_dedup_same_args_skipped(built, tmp_path):
-    """ORCH-07: 相同 (skill_id, args_hash) 探针第二次应跳过。"""
+    """ORCH-07: 相同 (skill_id, args_hash) 探针第二次应跳过；不同 args 可再跑。"""
     import hashlib
 
     from vela.util.jsonl import canonical_json
@@ -425,8 +417,12 @@ def test_probe_dedup_same_args_skipped(built, tmp_path):
                 return json.dumps({
                     "thought": "retry same probe",
                     "selected_skill": "SK-UDS-NRC",
-                    "actions": [{"tool": "search_logs",
-                                 "args": {"query": "NRC", "mode": "substring"}}],
+                    "actions": [
+                        {"tool": "search_logs",
+                         "args": {"query": "NRC", "mode": "substring"}},
+                        {"tool": "search_logs",
+                         "args": {"query": "0x72", "mode": "substring"}},
+                    ],
                     "stop": False,
                     "reason": "",
                 })
@@ -436,13 +432,18 @@ def test_probe_dedup_same_args_skipped(built, tmp_path):
     try:
         st = g.state
         assert hasattr(st, "executed_probes"), "SessionState 应有 executed_probes"
-        args = {"query": "NRC", "mode": "substring"}
-        key = f"SK-UDS-NRC:{hashlib.blake2b(canonical_json(args).encode('utf-8'), digest_size=8).hexdigest()}"
+        args_same = {"query": "NRC", "mode": "substring"}
+        key = (
+            f"SK-UDS-NRC:"
+            f"{hashlib.blake2b(canonical_json(args_same).encode('utf-8'), digest_size=8).hexdigest()}"
+        )
         st.executed_probes = [key]
         st.round_no = 2
         plan = g.node_plan(st)
-        tools = [a.get("tool") for a in (plan.get("actions") or [])]
-        assert "search_logs" not in tools, "同 args 探针应被去重跳过"
+        tools_args = [(a.get("tool"), a.get("args")) for a in (plan.get("actions") or [])]
+        assert ("search_logs", args_same) not in tools_args, "同 args 探针应被去重跳过"
+        assert any(a == ("search_logs", {"query": "0x72", "mode": "substring"})
+                   for a in tools_args), "不同 args 应允许再次执行"
     finally:
         g.close()
 
